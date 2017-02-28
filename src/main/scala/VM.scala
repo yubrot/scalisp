@@ -38,7 +38,7 @@ class Compiler(private val compileEnv: Env[Value]) {
   def :=(value: Value): Compiler = {
     value match {
       case Sym(sym) => this := Ldv(sym)
-      case List(f :: args) => compileEnv.refer(f) match {
+      case List(f, args@ _*) => compileEnv.refer(f) match {
         case Some(Pure(Syntax(syntax))) => syntax.interpret(this, args)
         case _ =>
           this := f
@@ -181,7 +181,7 @@ class Context extends MacroExpander {
   private def exec(env: Env[Value], code: Code): Value = new VM(this, env, code).run()
 
   def macroExpand(recurse: Boolean, expr: Value): Value = expr match {
-    case List(m :: args) => toplevel.refer(m) match {
+    case List(m, args@ _*) => toplevel.refer(m) match {
       case Some(Pure(Macro(menv, mpat, mcode))) =>
         val env = new Env(Some(menv))
         mpat.bind(env, args: _*)

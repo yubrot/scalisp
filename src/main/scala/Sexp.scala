@@ -76,18 +76,18 @@ object Bool {
 
 object List {
   def apply[A](ss: Sexp[A]*): Sexp[A] = ListLike(ss, Nil)
-  def unapply[A](s: Sexp[A]): Option[List[Sexp[A]]] = s match {
-    case Nil => Some(scala.Nil)
-    case a Cons List(bs) => Some(a :: bs)
+  def unapplySeq[A](s: Sexp[A]): Option[Seq[Sexp[A]]] = s match {
+    case Nil => Some(Seq.empty)
+    case a Cons List(bs@ _*) => Some(a +: bs)
     case _ => None
   }
 }
 
 object ListLike {
   def apply[A](ss: Seq[Sexp[A]], last: Sexp[A]): Sexp[A] = ss.foldRight(last)(Cons.apply _)
-  def unapply[A](s: Sexp[A]): Option[(List[Sexp[A]], Sexp[A])] = s match {
-    case a Cons ListLike(ss, s) => Some((a :: ss, s))
-    case s => Some((scala.Nil, s))
+  def unapply[A](s: Sexp[A]): Option[(Seq[Sexp[A]], Sexp[A])] = s match {
+    case a Cons ListLike(ss, s) => Some((a +: ss, s))
+    case s => Some((Seq.empty, s))
   }
 }
 
@@ -95,7 +95,7 @@ private[scalisp]
 class SyntaxSugar(private val name: String) {
   def apply[A](s: Sexp[A]): Sexp[A] = List(Sym(name), s)
   def unapply[A](s: Sexp[A]): Option[Sexp[A]] = s match {
-    case List(scala.List(Sym(sym), s)) if sym == name => Some(s)
+    case List(Sym(sym), s) if sym == name => Some(s)
     case _ => None
   }
 }

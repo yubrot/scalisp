@@ -126,7 +126,7 @@ object BuiltinCdr extends BuiltinCommon {
 object BuiltinApply extends BuiltinCommon {
   def name = "apply"
   def args = "2 arguments"
-  def body(vm: VM) = { case Seq(f, List(args)) => vm.apply(f, args: _*) }
+  def body(vm: VM) = { case Seq(f, List(args@ _*)) => vm.apply(f, args: _*) }
 }
 
 trait BuiltinTest extends BuiltinCommon {
@@ -180,8 +180,8 @@ object BuiltinTestMeta extends BuiltinTest {
 
 trait BuiltinArithmetic extends NamedBuiltinImpl {
   def zero: Option[Double]
-  def one(num: Double): Double
-  def fold(l: Double, r: Double): Double
+  def one: Double => Double
+  def fold: (Double, Double) => Double
 
   def run(vm: VM, ls: Seq[Value]): Unit = extractNumbers(ls) match {
     case Seq() => zero match {
@@ -189,43 +189,43 @@ trait BuiltinArithmetic extends NamedBuiltinImpl {
       case None => throw new EvaluationError(s"Operator $name takes at least one argument")
     }
     case Seq(num) => vm.push(Num(one(num)))
-    case head +: tail => vm.push(Num(tail.foldLeft(head)(fold _)))
+    case head +: tail => vm.push(Num(tail.foldLeft(head)(fold)))
   }
 }
 
 object BuiltinAdd extends BuiltinArithmetic {
   def name = "+"
   def zero = Some(0)
-  def one(num: Double) = num
-  def fold(l: Double, r: Double) = l + r
+  def one = +_
+  def fold = _ + _
 }
 
 object BuiltinSub extends BuiltinArithmetic {
   def name = "-"
   def zero = None
-  def one(num: Double) = -num
-  def fold(l: Double, r: Double) = l - r
+  def one = -_
+  def fold = _ - _
 }
 
 object BuiltinMul extends BuiltinArithmetic {
   def name = "*"
   def zero = Some(1)
-  def one(num: Double) = num
-  def fold(l: Double, r: Double) = l * r
+  def one = +_
+  def fold = _ * _
 }
 
 object BuiltinDiv extends BuiltinArithmetic {
   def name = "/"
   def zero = None
-  def one(num: Double) = num
-  def fold(l: Double, r: Double) = l / r
+  def one = +_
+  def fold = _ / _
 }
 
 object BuiltinMod extends BuiltinArithmetic {
   def name = "%"
   def zero = None
-  def one(num: Double) = num
-  def fold(l: Double, r: Double) = l % r
+  def one = +_
+  def fold = _ % _
 }
 
 object BuiltinConcat extends NamedBuiltinImpl {

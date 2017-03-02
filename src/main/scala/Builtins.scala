@@ -126,7 +126,7 @@ object BuiltinCdr extends BuiltinCommon {
 object BuiltinApply extends BuiltinCommon {
   def name = "apply"
   def args = "2 arguments"
-  def body(vm: VM) = { case Seq(f, List(args@ _*)) => vm.apply(f, args: _*) }
+  def body(vm: VM) = { case Seq(f, List(args@ _*)) => vm.app(f, args: _*) }
 }
 
 trait BuiltinTest extends BuiltinCommon {
@@ -217,7 +217,7 @@ object BuiltinMul extends BuiltinArithmetic {
 object BuiltinDiv extends BuiltinArithmetic {
   def name = "/"
   def zero = None
-  def one = +_
+  def one = 1 / _
   def fold = _ / _
 }
 
@@ -311,7 +311,7 @@ object BuiltinCallCC extends BuiltinCommon {
   def args = "one argument"
   def body(vm: VM) = { case Seq(f) =>
     val cont = vm.captureCont()
-    vm.apply(f, cont)
+    vm.app(f, cont)
   }
 }
 
@@ -319,9 +319,9 @@ object BuiltinEval extends BuiltinCommon {
   def name = "eval"
   def args = "an expression"
   def body(vm: VM) = { case Seq(e) =>
-    vm.context.eval(e) match {
-      case Right(v) => vm.push(v)
-      case Left(e) => throw new EvaluationError("On eval: " + e)
+    vm.context(_.eval(e)) match {
+      case Right(v) => vm.push(Cons(True, v))
+      case Left(e) => vm.push(Cons(False, Str(e)))
     }
   }
 }
@@ -329,7 +329,12 @@ object BuiltinEval extends BuiltinCommon {
 trait BuiltinMacroExpand extends BuiltinCommon {
   def args = "an expression"
   def recurse: Boolean
-  def body(vm: VM) = { case Seq(e) => vm.push(vm.context.macroExpand(recurse, e)) }
+  def body(vm: VM) = { case Seq(e) =>
+    vm.context(_.macroExpand(recurse, e)) match {
+      case Right(v) => vm.push(Cons(True, v))
+      case Left(e) => vm.push(Cons(False, Str(e)))
+    }
+  }
 }
 
 object BuiltinMacroExpandAll extends BuiltinMacroExpand {

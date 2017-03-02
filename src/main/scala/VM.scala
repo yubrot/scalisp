@@ -63,10 +63,6 @@ class Compiler(private val compileEnv: Env[Value]) {
   }
 }
 
-object Compiler {
-  def compile(env: Env[Value], expr: Value): Code = (new Compiler(env) := expr).result
-}
-
 class VM(val context: Context, env: Env[Value], code: Code) {
   private[scalisp]
   val cont = new Cont(scala.Nil, env, code, scala.Nil)
@@ -99,7 +95,7 @@ class VM(val context: Context, env: Env[Value], code: Code) {
     case _ => throw new InternalError("Inconsistent dump")
   }
 
-  def apply(f: Value, args: Value*): Unit = f match {
+  def app(f: Value, args: Value*): Unit = f match {
     case Pure(Fun(fenv, fpat, fcode)) =>
       val env = new Env(Some(fenv))
       fpat.bind(env, args: _*)
@@ -126,7 +122,7 @@ class VM(val context: Context, env: Env[Value], code: Code) {
       var args: List[Value] = scala.Nil
       for (_ <- 1 to argc) args = pop() :: args
       val f = pop()
-      apply(f, args: _*)
+      app(f, args: _*)
     case Leave => leave()
     case Pop => pop()
     case Def(name) =>
@@ -180,6 +176,8 @@ class Context extends MacroExpander {
 
   private def exec(env: Env[Value], code: Code): Value = new VM(this, env, code).run()
 
+  def compile(expr: Value): Code = (new Compiler(toplevel) := expr).result
+
   def macroExpand(recurse: Boolean, expr: Value): Value = expr match {
     case List(m, args@ _*) => toplevel.refer(m) match {
       case Some(Pure(Macro(menv, mpat, mcode))) =>
@@ -202,18 +200,15 @@ class Context extends MacroExpander {
     case _ => expr
   }
 
-  def eval(expr: Value): Either[String, Value] = {
+  def eval(expr: Value): Value = {
+    var s = macroExpand(true, expr)
+    val code = compile(s)
+    exec(toplevel, code)
+  }
+
+  def apply[A](body: Context => A): Either[String, A] = {
     try {
-      var s = macroExpand(true, expr)
-      // println("Macro expanded:")
-      // println(s.inspect)
-      val code = Compiler.compile(toplevel, s)
-      // println("Compiled VM code:")
-      // println(CodePrinter.print(code))
-      val result = exec(toplevel, code)
-      // println("Result:")
-      // println(result.inspect)
-      Right(result)
+      Right(body(this))
     } catch {
       case e: UndefinedVariable => Left("Undefined variable: " + e.name)
       case e: EvaluationError => Left("Evaluation error: " + e.msg)

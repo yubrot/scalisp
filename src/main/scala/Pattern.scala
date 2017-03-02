@@ -5,7 +5,7 @@ case class Pattern(val fixed: Seq[String], val rest: Option[String]) {
   def bind[A](env: Env[Sexp[A]], args: Sexp[A]*): Unit = {
     val paramc = fixed.size
     val argc = args.size
-    if (argc < paramc) {
+    if (argc < paramc || (rest.isEmpty && argc > paramc)) {
       val prefix = rest map (_ => "at least ") getOrElse ""
       throw new EvaluationError(s"This function takes $prefix$paramc arguments")
     }

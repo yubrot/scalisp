@@ -6,12 +6,17 @@ import fastparse.core.Parsed._
 object Main {
   def main(args: Array[String]): Unit = {
     val context = new Context
-    boot(context)
 
-    if (args.size == 1) {
-      execFile(context, args(0))
-    } else {
-      repl(context)
+    args match {
+      case Array(file) =>
+        boot(context)
+        execFile(context, args(0))
+      case Array("-test", test) =>
+        Builtins.register(context)
+        TestRunner.run(context, test)
+      case _ =>
+        boot(context)
+        repl(context)
     }
   }
 
@@ -33,7 +38,7 @@ object Main {
   def exec(context: Context, code: String): Either[String, Unit] = {
     Parser.program.parse(code) match {
       case Success(program, _) =>
-        for (s <- program) context.eval(s) match {
+        for (line <- program) context(_.eval(line)) match {
           case Right(_) => {}
           case Left(e) => return Left(e)
         }
@@ -51,7 +56,7 @@ object Main {
 
     while (true) Parser.line.parseIterator(in) match {
       case Success(None, _) => return
-      case Success(Some(expr), _) => context.eval(expr) match {
+      case Success(Some(expr), _) => context(_.eval(expr)) match {
         case Right(result) => Console.println(result.inspect)
         case Left(e) => Console.err.println(e)
       }

@@ -30,11 +30,11 @@ class CodePrinter {
       s"ldf $label"
     case Ldm(pattern, code) =>
       val label = putBlock(s"macro $pattern", code)
-      s"ldf $label"
+      s"ldm $label"
     case Ldb(name) => s"ldb $name"
     case Sel(a, b) =>
       val al = putBlock("then", a)
-      val bl = putBlock("then", b)
+      val bl = putBlock("else", b)
       s"sel $al $bl"
     case App(argc) => s"app $argc"
     case Leave => "leave"
@@ -44,10 +44,10 @@ class CodePrinter {
   }
 }
 
-object CodePrinter {
-  def print(code: Code): String = {
+object Code {
+  def unapply(code: Code): Option[String] = {
     val printer = new CodePrinter
     printer.putBlock("entry", code)
-    return printer.print()
+    return Some(printer.print())
   }
 }

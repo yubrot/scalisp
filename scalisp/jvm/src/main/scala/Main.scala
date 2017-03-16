@@ -13,7 +13,7 @@ object Main {
         execFile(context, args(0))
       case Array("-test", test) =>
         Builtins.register(context)
-        TestRunner.run(context, test)
+        TestRunner.run(context, Source.fromFile(test).getLines)
       case _ =>
         boot(context)
         repl(context)

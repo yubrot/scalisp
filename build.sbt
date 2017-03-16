@@ -5,7 +5,9 @@ lazy val scalisp = crossProject
     name := "scalisp",
 
     scalaVersion := "2.12.1",
-    scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlint")
+    scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlint"),
+
+    publishArtifact := false
   )
   .jvmSettings(
     assemblyJarName in assembly := "scalisp.jar",
@@ -22,7 +24,14 @@ lazy val scalisp = crossProject
         StandardCopyOption.REPLACE_EXISTING)
     }
   )
+  .jsSettings(
+    libraryDependencies += "com.lihaoyi" %%% "fastparse" % "0.4.2",
+
+    artifactPath in (Compile, fastOptJS) := file("gh-pages/scalisp.js"),
+    artifactPath in (Compile, fullOptJS) := file("gh-pages/scalisp.js")
+  )
 
 lazy val scalispJVM = scalisp.jvm
+lazy val scalispJS = scalisp.js
 
 val embedBootCode = taskKey[Unit]("embedBootCode")

@@ -44,10 +44,14 @@ class CodePrinter {
   }
 }
 
-object Code {
-  def unapply(code: Code): Option[String] = {
+object CodePrinter {
+  def print(code: Code): String = {
     val printer = new CodePrinter
     printer.putBlock("entry", code)
-    return Some(printer.print())
+    printer.print()
   }
+}
+
+object Code {
+  def unapply(code: Code): Option[String] = Some(CodePrinter.print(code))
 }

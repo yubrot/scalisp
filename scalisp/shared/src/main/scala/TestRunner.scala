@@ -1,6 +1,5 @@
 package scalisp
 
-import scala.io._
 import fastparse.core.Parsed._
 
 abstract sealed class Command
@@ -16,9 +15,9 @@ case class EvalFailure(input: String) extends Command
 case class EvalAll(input: String) extends Command
 
 object TestRunner {
-  def run(context: Context, test: String): Unit = {
-    val src = Source.fromFile(test).getLines
+  def run(context: Context, src: Iterator[String], log: Boolean = false): Unit = {
     for (header <- src) {
+      if (log) println(header)
       val command = parseCommand(src)
       try {
         runCommand(context, command)

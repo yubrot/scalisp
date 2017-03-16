@@ -1,0 +1,64 @@
+* {
+  margin: 0;
+  padding: 0;
+}
+a {
+  color: #999;
+  transition: 0.3s;
+  text-decoration: none;
+}
+a:hover {
+  color: #900;
+}
+html {
+  height: 100%;
+}
+body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  display: flex;
+  align-items: flex-end;
+}
+header h1 {
+  padding: 20pt 40pt 0;
+  font-size: 200%;
+}
+.buttons {
+  padding: 20pt 20pt 5pt;
+}
+.buttons ul {
+  display: inline-block;
+  padding-right: 20pt;
+}
+.buttons li {
+  display: inline-block;
+}
+.buttons li a {
+  display: block;
+  padding: 4pt 12pt;
+  border: 1px solid #ddd;
+}
+.buttons li a:hover {
+  background: #eee;
+}
+.editor {
+  flex-grow: 1;
+  display: flex;
+}
+.editor textarea {
+  border: 1px solid #ddd;
+  margin: 5pt 0 5pt 5pt;
+  flex: 1 1 50%;
+}
+.editor pre {
+  background: #eee;
+  margin: 5pt;
+  overflow: auto;
+  flex: 1 1 50%;
+}
+.editor pre .error {
+  color: #900;
+}

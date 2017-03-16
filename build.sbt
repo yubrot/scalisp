@@ -1,21 +1,28 @@
 import java.nio.file._
 
-name := "scalisp"
-assemblyJarName in assembly := "scalisp.jar"
+lazy val scalisp = crossProject
+  .settings(
+    name := "scalisp",
 
-scalaVersion := "2.12.1"
-scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlint")
+    scalaVersion := "2.12.1",
+    scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlint")
+  )
+  .jvmSettings(
+    assemblyJarName in assembly := "scalisp.jar",
 
-libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.2"
+    libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.2",
+
+    compile in Compile := (compile in Compile dependsOn embedBootCode).value,
+
+    embedBootCode := {
+      Files.createDirectories(Paths.get("scalisp/jvm/src/main/resources"))
+      Files.copy(
+        Paths.get("lispboot/boot.lisp"),
+        Paths.get("scalisp/jvm/src/main/resources/boot.lisp"),
+        StandardCopyOption.REPLACE_EXISTING)
+    }
+  )
+
+lazy val scalispJVM = scalisp.jvm
 
 val embedBootCode = taskKey[Unit]("embedBootCode")
-
-compile in Compile := (compile in Compile dependsOn embedBootCode).value
-
-embedBootCode := {
-  Files.createDirectories(Paths.get("src/main/resources"))
-  Files.copy(
-    Paths.get("lispboot/boot.lisp"),
-    Paths.get("src/main/resources/boot.lisp"),
-    StandardCopyOption.REPLACE_EXISTING)
-}

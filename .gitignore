@@ -1,2 +1,3 @@
+gh-pages/
 target/
-/src/main/resources/boot.lisp
+scalisp/jvm/src/main/resources/boot.lisp

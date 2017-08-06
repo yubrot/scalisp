@@ -23,14 +23,13 @@ object Parser {
   }
 
   private val s: Parser[S] = {
-    val nil  = P("()" | "[]") map (_ => Nil)
     val cons = P("(" ~/ sInner ~ ")" | "[" ~/ sInner ~ "]")
     val num  = P(number) map Num.apply
     val sym  = P(symbol) map Sym.apply
     val str  = P(string) map Str.apply
     val t    = P("#t") map (_ => True)
     val f    = P("#f") map (_ => False)
-    P(nil | cons | sQuoted | num | sym | str | t | f)
+    P(cons | sQuoted | num | sym | str | t | f)
   }
 
   private val sQuoted: Parser[S] = {
@@ -42,8 +41,9 @@ object Parser {
   }
 
   private val sInner: Parser[S] = {
-    val term = ("." ~/ s).?
-    P(s.rep(1) ~/ term) map { case (ss, t) => ListLike(ss, t getOrElse Nil) }
+    val oneOrMore = (s.rep(1) ~/ ("." ~/ s).?) map { case (ss, t) => ListLike(ss, t getOrElse Nil) }
+    val zero = Pass map (_ => Nil)
+    P(oneOrMore | zero)
   }
 
   val letter = ('A' to 'Z') ++ ('a' to 'z')

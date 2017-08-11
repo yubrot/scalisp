@@ -8,7 +8,7 @@ case class EvaluationError(msg: String) extends Exception
 
 trait SyntaxImpl {
   def expandArgs(macroExpander: MacroExpander, args: Seq[Value]): Seq[Value]
-  def interpret(compiler: Compiler, args: Seq[Value]): Unit
+  def compile(compiler: Compiler, args: Seq[Value]): Unit
 }
 
 trait BuiltinImpl {
@@ -39,7 +39,7 @@ class Compiler(private val compileEnv: Env[Value]) {
     value match {
       case Sym(sym) => this := Ldv(sym)
       case List(f, args@ _*) => compileEnv.refer(f) match {
-        case Some(Pure(Syntax(syntax))) => syntax.interpret(this, args)
+        case Some(Pure(Syntax(syntax))) => syntax.compile(this, args)
         case _ =>
           this := f
           for (arg <- args) this := arg

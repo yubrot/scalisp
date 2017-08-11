@@ -26,7 +26,7 @@ trait SyntaxCommon extends SyntaxImpl {
     }
   }
 
-  def interpret(compiler: Compiler, args: Seq[Value]): Unit = {
+  def compile(compiler: Compiler, args: Seq[Value]): Unit = {
     def m = body(compiler)
     if (m.isDefinedAt(args))
       m(args)

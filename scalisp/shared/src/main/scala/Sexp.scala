@@ -1,5 +1,8 @@
 package scalisp
 
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
+
 trait Inspect {
   def inspect(): String
 }
@@ -17,8 +20,13 @@ case class Sym(data: String) extends Sexp[Nothing] {
   def inspect(): String = data
 }
 
-case class Str(data: String) extends Sexp[Nothing] {
-  def inspect(): String = "\"" + Str.escape(data) + "\""
+case class Str(data: Array[Byte]) extends Sexp[Nothing] {
+  def inspect(): String = "\"" + Str.escape(toString) + "\""
+
+  override def toString(): String = {
+    val buf = ByteBuffer.wrap(data)
+    StandardCharsets.UTF_8.decode(buf).toString()
+  }
 }
 
 abstract case class Bool(data: Boolean) extends Sexp[Nothing] {
@@ -47,6 +55,10 @@ case class Pure[A <: Inspect](data: A) extends Sexp[A] {
 }
 
 object Str {
+  def apply(str: String): Str = {
+    Str(str.getBytes(StandardCharsets.UTF_8))
+  }
+
   def escape(data: String): String = {
     data.replaceAll("\\\\", "\\\\\\\\")
         .replaceAll("\t", "\\\\t")

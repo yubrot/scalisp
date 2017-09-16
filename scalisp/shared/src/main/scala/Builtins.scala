@@ -1,5 +1,7 @@
 package scalisp
 
+import java.nio.ByteBuffer
+
 object Builtins {
   def register(context: Context): Unit = {
     def register(impl: NamedBuiltinImpl): Unit = context.builtins(impl.name) = impl
@@ -61,7 +63,7 @@ trait NamedBuiltinImpl extends BuiltinImpl {
     case s => throw new EvaluationError(s"Operator $name takes number arguments: ${s.inspect}")
   }
 
-  def extractStrings(ls: Seq[Value]): Seq[String] = ls map {
+  def extractStrings(ls: Seq[Value]): Seq[Array[Byte]] = ls map {
     case Str(str) => str
     case s => throw new EvaluationError(s"Operator $name takes string arguments: ${s.inspect}")
   }
@@ -98,7 +100,7 @@ object BuiltinExit extends BuiltinCommon {
 object BuiltinError extends BuiltinCommon {
   def name = "error"
   def args = "a string argument"
-  def body(vm: VM) = { case Seq(Str(str)) => throw new EvaluationError(str) }
+  def body(vm: VM) = { case Seq(str @ Str(_)) => throw new EvaluationError(str.toString) }
 }
 
 final class BuiltinGensym extends BuiltinCommon {
@@ -233,14 +235,16 @@ object BuiltinConcat extends NamedBuiltinImpl {
 
   def run(vm: VM, ls: Seq[Value]): Unit = {
     val strs = extractStrings(ls)
-    vm.push(Str(strs.foldLeft("")(_ + _)))
+    val buf = ByteBuffer.allocate(strs.map(_.length).sum)
+    for (str <- strs) buf.put(str)
+    vm.push(Str(buf.array))
   }
 }
 
 object BuiltinLength extends BuiltinCommon {
   def name = "length"
   def args = "a string argument"
-  def body(vm: VM) = { case Seq(Str(str)) => vm.push(Num(str.size)) }
+  def body(vm: VM) = { case Seq(Str(str)) => vm.push(Num(str.length)) }
 }
 
 object BuiltinEq extends NamedBuiltinImpl {
@@ -254,7 +258,7 @@ object BuiltinEq extends NamedBuiltinImpl {
   def equal(a: Value, b: Value): Boolean = (a, b) match {
     case (Num(a), Num(b)) => a == b
     case (Sym(a), Sym(b)) => a == b
-    case (Str(a), Str(b)) => a == b
+    case (Str(a), Str(b)) => a.toSeq == b.toSeq
     case (Cons(a, a2), Cons(b, b2)) => equal(a, b) && equal(a2, b2)
     case (Nil, Nil) => true
     case (Bool(a), Bool(b)) => a == b
@@ -263,20 +267,22 @@ object BuiltinEq extends NamedBuiltinImpl {
 }
 
 trait BuiltinCompare extends NamedBuiltinImpl {
-  def compareNum: (Double, Double) => Boolean
-  def compareStr: (String, String) => Boolean
+  def compare[A: Ordering](a: A, b: A): Boolean
+
+  def compareAll[A: Ordering](a: A, bs: Seq[A]): Boolean = {
+    (a +: bs).zip(bs).forall { case (l, r) => compare(l, r) }
+  }
 
   def run(vm: VM, ls: Seq[Value]): Unit = ls match {
     case Seq() => vm.push(True)
     case Num(a) +: ls => {
-      val nums = extractNumbers(ls)
-      val result = ((a +: nums) zip nums).forall { case (l, r) => compareNum(l, r) }
-      vm.push(Bool(result))
+      val bs = extractNumbers(ls)
+      vm.push(Bool(compareAll(a, bs)))
     }
     case Str(a) +: ls => {
-      val strs = extractStrings(ls)
-      val result = ((a +: strs) zip strs).forall { case (l, r) => compareStr(l, r) }
-      vm.push(Bool(result))
+      import scala.math.Ordering.Implicits.seqDerivedOrdering
+      val bs = extractStrings(ls).map(_.toSeq)
+      vm.push(Bool(compareAll(a.toSeq, bs)))
     }
     case _ => throw new EvaluationError(s"Operator $name is only defined for strings and numbers")
   }
@@ -284,26 +290,22 @@ trait BuiltinCompare extends NamedBuiltinImpl {
 
 object BuiltinLt extends BuiltinCompare {
   def name = "<"
-  def compareNum = _ < _
-  def compareStr = _ < _
+  def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].lt(a, b)
 }
 
 object BuiltinGt extends BuiltinCompare {
   def name = ">"
-  def compareNum = _ > _
-  def compareStr = _ > _
+  def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].gt(a, b)
 }
 
 object BuiltinLe extends BuiltinCompare {
   def name = "<="
-  def compareNum = _ <= _
-  def compareStr = _ <= _
+  def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].lteq(a, b)
 }
 
 object BuiltinGe extends BuiltinCompare {
   def name = ">="
-  def compareNum = _ >= _
-  def compareStr = _ >= _
+  def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].gteq(a, b)
 }
 
 object BuiltinCallCC extends BuiltinCommon {
@@ -351,7 +353,7 @@ object BuiltinPrint extends NamedBuiltinImpl {
   def name = "print"
   def run(vm: VM, ls: Seq[Value]): Unit = {
     ls foreach {
-      case Str(str) => print(str)
+      case str @ Str(_) => print(str.toString)
       case s => throw new EvaluationError("Cannot print non-string argument: " + s.inspect)
     }
     vm.push(Nil)

@@ -21,12 +21,9 @@ case class Sym(data: String) extends Sexp[Nothing] {
 }
 
 case class Str(data: Array[Byte]) extends Sexp[Nothing] {
-  def inspect(): String = "\"" + Str.escape(toString) + "\""
+  def inspect(): String = "\"" + Str.escape(Str.decode(data)) + "\""
 
-  override def toString(): String = {
-    val buf = ByteBuffer.wrap(data)
-    StandardCharsets.UTF_8.decode(buf).toString()
-  }
+  override def toString(): String = Str.decode(data)
 }
 
 abstract case class Bool(data: Boolean) extends Sexp[Nothing] {
@@ -55,22 +52,46 @@ case class Pure[A <: Inspect](data: A) extends Sexp[A] {
 }
 
 object Str {
-  def apply(str: String): Str = {
-    Str(str.getBytes(StandardCharsets.UTF_8))
-  }
+  def fromString(str: String): Str = Str(encode(str))
+
+  def charset = StandardCharsets.UTF_8
+
+  def encode(str: String): Array[Byte] = str.getBytes(charset)
+
+  def decode(bytes: Array[Byte]): String = charset.decode(ByteBuffer.wrap(bytes)).toString
 
   def escape(data: String): String = {
-    data.replaceAll("\\\\", "\\\\\\\\")
-        .replaceAll("\t", "\\\\t")
-        .replaceAll("\n", "\\\\n")
-        .replaceAll("\"", "\\\\\"")
+    data.flatMap {
+      case '\\' => "\\\\"
+      case '\t' => "\\t"
+      case '\n' => "\\n"
+      case '"' => "\\\""
+      case c => c.toString
+    }
   }
 
   def unescape(data: String): String = {
-    data.replaceAll("\\\\t", "\t")
-        .replaceAll("\\\\n", "\n")
-        .replaceAll("\\\\\"", "\"")
-        .replaceAll("\\\\\\\\", "\\\\")
+    val buf = new scala.collection.mutable.StringBuilder
+    var escape = false
+    for (c <- data) {
+      if (escape) {
+        buf += (c match {
+          case '\\' => '\\'
+          case 't' => '\t'
+          case 'n' => '\n'
+          case '"' => '"'
+          case _ => throw new InternalError("Unknown escape sequence: \\" + c)
+        })
+        escape = false
+      } else {
+        c match {
+          case '\\' => escape = true
+          case c => buf += c
+        }
+      }
+    }
+    if (escape) throw new InternalError("Unexpected terminal escape")
+    buf.result
   }
 }
 

@@ -26,7 +26,7 @@ object Parser {
     val cons = P("(" ~/ sInner ~ ")" | "[" ~/ sInner ~ "]")
     val num  = P(number) map Num.apply
     val sym  = P(symbol) map Sym.apply
-    val str  = P(string) map Str.apply
+    val str  = P(string) map Str.fromString
     val t    = P("#t") map (_ => True)
     val f    = P("#f") map (_ => False)
     P(cons | sQuoted | num | sym | str | t | f)
@@ -66,7 +66,7 @@ object Parser {
   val string: Parser[String] = {
     val a = CharsWhile(!"\\\"".contains(_))
     val escapeSequence = "\\".~/ ~~ CharIn("\\tn\"")
-    val text = (a | escapeSequence).rep
+    val text = (a | escapeSequence).repX
     P("\"".~/ ~~ text.! ~~ "\"") map Str.unescape
   }
 }

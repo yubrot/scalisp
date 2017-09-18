@@ -15,16 +15,18 @@ case class EvalFailure(input: String) extends Command
 case class EvalAll(input: String) extends Command
 
 object TestRunner {
-  def run(context: Context, src: Iterator[String], log: Boolean = false): Unit = {
+  def run(
+    context: Context,
+    src: Iterator[String],
+    out: String => Unit = _ => {},
+    err: String => Unit = Console.err.println _
+  ): Unit = {
     for (header <- src) {
-      if (log) println(header)
+      out(header)
       val command = parseCommand(src)
-      try {
-        runCommand(context, command)
-      } catch {
+      try runCommand(context, command) catch {
         case e: TestFailed =>
-          Console.err.println(s"Test failed at $header: ${e.getMessage}")
-          throw e
+          err(s"Test failed at $header: ${e.getMessage}")
       }
     }
   }

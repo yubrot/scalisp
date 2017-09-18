@@ -3,8 +3,10 @@ package scalisp
 import scala.annotation._
 import scala.collection.mutable.{Map, ListBuffer}
 
-case class InternalError(msg: String) extends Exception
-case class EvaluationError(msg: String) extends Exception
+abstract sealed class VMException extends Exception
+
+case class InternalError(msg: String) extends VMException
+case class EvaluationError(msg: String) extends VMException
 
 trait SyntaxImpl {
   def expandArgs(macroExpander: MacroExpander, args: Seq[Value]): Seq[Value]
@@ -102,6 +104,13 @@ class VM(val context: Context, env: Env[Value], code: Code) {
       enter(env, fcode)
     case Pure(Builtin(builtin)) => builtin.run(this, args)
     case _ => throw new EvaluationError("Cannot call: " + f.inspect)
+  }
+
+  def appNever(f: Value, args: Value*): Unit = {
+    cont.stack = scala.Nil
+    cont.code = Seq{Leave}
+    cont.dump = scala.Nil
+    app(f, args: _*)
   }
 
   def captureCont(): Value = Pure(Builtin(cont.clone))

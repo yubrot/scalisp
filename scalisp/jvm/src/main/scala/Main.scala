@@ -7,31 +7,34 @@ object Main {
   def main(args: Array[String]): Unit = {
     val context = new Context
 
-    args match {
-      case Array(file) =>
-        boot(context)
-        execFile(context, args(0))
-      case Array("-test", test) =>
-        Builtins.register(context)
-        TestRunner.run(context, Source.fromFile(test).getLines)
-      case _ =>
-        boot(context)
+    args.toSeq match {
+      case Seq() =>
+        init(context, true, Seq())
         repl(context)
+      case "-test" +: tests =>
+        init(context, false, Seq())
+        for (test <- tests) TestRunner.run(context, Source.fromFile(test).getLines)
+      case ls =>
+        val (files, args) = ls.span(_ != "--")
+        init(context, true, if (args.isEmpty) args else args.tail)
+        for (file <- files) execFile(context, file)
     }
   }
 
-  def boot(context: Context): Unit = {
-    Builtins.register(context)
-    exec(context, Source.fromResource("boot.lisp").mkString) match {
-      case Right(_) => {}
-      case Left(e) => throw new RuntimeException(e)
+  def init(context: Context, boot: Boolean, args: Seq[String]): Unit = {
+    JVMBuiltins.register(context, args)
+    if (boot) {
+      exec(context, Source.fromResource("boot.lisp").mkString) match {
+        case Right(_) => {}
+        case Left(e) => throw new RuntimeException(s"init: $e")
+      }
     }
   }
 
   def execFile(context: Context, filename: String): Unit = {
     exec(context, Source.fromFile(filename).mkString) match {
       case Right(_) => {}
-      case Left(e) => Console.err.println(e)
+      case Left(e) => throw new RuntimeException(s"$filename: $e")
     }
   }
 

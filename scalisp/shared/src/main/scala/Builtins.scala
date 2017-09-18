@@ -1,250 +1,314 @@
 package scalisp
 
 import java.nio.ByteBuffer
+import scala.util.control.NonFatal
 
-object Builtins {
-  def register(context: Context): Unit = {
-    def register(impl: NamedBuiltinImpl): Unit = context.builtins(impl.name) = impl
+trait Builtins {
+  def put(context: Context, impl: NamedBuiltinImpl): Unit = {
+    context.builtins(impl.name) = impl
+  }
 
-    register(BuiltinCons)
+  def register(context: Context, args: Seq[String]): Unit = {
+    put(context, BuiltinCons)
 
-    register(BuiltinExit)
-    register(BuiltinError)
+    put(context, BuiltinExit)
+    put(context, BuiltinError)
 
-    register(new BuiltinGensym)
+    put(context, new BuiltinGensym)
 
-    register(BuiltinCar)
-    register(BuiltinCdr)
+    put(context, BuiltinCar)
+    put(context, BuiltinCdr)
 
-    register(BuiltinApply)
+    put(context, BuiltinApply)
 
-    register(BuiltinTestNum)
-    register(BuiltinTestSym)
-    register(BuiltinTestStr)
-    register(BuiltinTestCons)
-    register(BuiltinTestNil)
-    register(BuiltinTestBool)
-    register(BuiltinTestProc)
-    register(BuiltinTestMeta)
+    put(context, BuiltinTestNum)
+    put(context, BuiltinTestSym)
+    put(context, BuiltinTestStr)
+    put(context, BuiltinTestCons)
+    put(context, BuiltinTestNil)
+    put(context, BuiltinTestBool)
+    put(context, BuiltinTestProc)
+    put(context, BuiltinTestMeta)
+    put(context, BuiltinTestPort)
+    put(context, BuiltinTestVec)
 
-    register(BuiltinAdd)
-    register(BuiltinSub)
-    register(BuiltinMul)
-    register(BuiltinDiv)
-    register(BuiltinMod)
+    put(context, BuiltinAdd)
+    put(context, BuiltinSub)
+    put(context, BuiltinMul)
+    put(context, BuiltinDiv)
+    put(context, BuiltinMod)
 
-    register(BuiltinConcat)
-    register(BuiltinLength)
+    put(context, BuiltinEq)
+    put(context, BuiltinLt)
+    put(context, BuiltinGt)
+    put(context, BuiltinLe)
+    put(context, BuiltinGe)
 
-    register(BuiltinEq)
-    register(BuiltinLt)
-    register(BuiltinGt)
-    register(BuiltinLe)
-    register(BuiltinGe)
+    put(context, BuiltinCallCC)
+    put(context, BuiltinNever)
 
-    register(BuiltinCallCC)
+    put(context, BuiltinStr)
+    put(context, BuiltinStrRef)
+    put(context, BuiltinStrBytesize)
+    put(context, BuiltinStrConcat)
+    put(context, BuiltinSubstr)
+    put(context, BuiltinSymToStr)
+    put(context, BuiltinNumToStr)
+    put(context, BuiltinStrToNum)
 
-    register(BuiltinEval)
-    register(BuiltinMacroExpandAll)
-    register(BuiltinMacroExpandOnce)
+    put(context, BuiltinVec)
+    put(context, BuiltinVecMake)
+    put(context, BuiltinVecRef)
+    put(context, BuiltinVecLength)
+    put(context, BuiltinVecSet)
+    put(context, BuiltinVecCopy)
 
-    register(BuiltinPrint)
-    register(BuiltinNewline)
+    // open
+    put(context, BuiltinClose)
+    // stdin, stdout, stderr
 
-    register(BuiltinInspect)
+    put(context, BuiltinReadByte)
+    put(context, BuiltinReadStr)
+    put(context, BuiltinReadLine)
+    put(context, BuiltinWriteByte)
+    put(context, BuiltinWriteStr)
+    put(context, BuiltinWriteLine)
+    put(context, BuiltinFlush)
+
+    put(context, new BuiltinArgs(args))
+
+    put(context, BuiltinEval)
+    put(context, BuiltinMacroExpand)
+    put(context, BuiltinMacroExpandOnce)
   }
 }
 
 trait NamedBuiltinImpl extends BuiltinImpl {
   def name: String
 
-  def extractNumbers(ls: Seq[Value]): Seq[Double] = ls map {
-    case Num(num) => num
-    case s => throw new EvaluationError(s"Operator $name takes number arguments: ${s.inspect}")
+  def takes[A](arity: String)(f: PartialFunction[Seq[Value], A])(args: Seq[Value]): A = {
+    if (f isDefinedAt args) return f(args)
+    throw new EvaluationError(s"$name takes $arity")
   }
 
-  def extractStrings(ls: Seq[Value]): Seq[Array[Byte]] = ls map {
-    case Str(str) => str
-    case s => throw new EvaluationError(s"Operator $name takes string arguments: ${s.inspect}")
+  def takeNone = takes("no arguments") { case Seq() => {} } _
+  def takeOne = takes("one argument") { case Seq(a) => a } _
+  def takeTwo = takes("two arguments") { case Seq(a, b) => (a, b) } _
+  def takeThree = takes("three arguments") { case Seq(a, b, c) => (a, b, c) } _
+  def takeFive = takes("five arguments") { case Seq(a, b, c, d, e) => (a, b, c, d, e) } _
+
+  def take[A](f: PartialFunction[Value, A])(name: String, v: Value): A = {
+    if (f isDefinedAt v) return f(v)
+    throw new EvaluationError(s"Expected $name but got ${v.inspect}")
+  }
+
+  def takeNum = take { case Num(n) => n } _
+  def takeSym = take { case Sym(s) => s } _
+  def takeStr = take { case Str(s) => s } _
+  def takeCons = take { case a Cons b => (a, b) } _
+  def takeList = take { case List(ls @ _*) => ls } _
+  def takeVec = take { case Pure(Vec(arr)) => arr } _
+  def takePort = take { case Pure(Port(p)) => p } _
+  def takePortIn = take { case Pure(Port(p)) => p.in.getOrElse(throw new EvaluationError("port is not available for reading")) } _
+  def takePortOut = take { case Pure(Port(p)) => p.out.getOrElse(throw new EvaluationError("port is not available for writing")) } _
+
+  def readResult[A](r: Either[String, Option[A]])(convert: A => Value): Value = {
+    r match {
+      case Right(Some(v)) => Cons(True, convert(v))
+      case Right(None) => Cons(True, Sym("eof"))
+      case Left(e) => Cons(False, Str.fromString(e))
+    }
+  }
+
+  def writeResult(r: Either[String, Int]): Value = {
+    r match {
+      case Right(i) => Cons(True, if (i == 0) Nil else Num(i))
+      case Left(e) => Cons(False, Str.fromString(e))
+    }
   }
 }
 
-trait BuiltinCommon extends NamedBuiltinImpl {
-  def args: String
-  def body(vm: VM): PartialFunction[Seq[Value], Unit]
-
-  def run(vm: VM, ls: Seq[Value]): Unit = {
-    val f = body(vm)
-    if (f.isDefinedAt(ls))
-      f(ls)
-    else
-      throw new EvaluationError(s"Builtin function $name takes $args")
+object TryEval {
+  def apply[A](body: => A): Either[String, A] = {
+    try Right(body) catch {
+      case e: VMException => throw e
+      case NonFatal(e) => Left(Option(e.getMessage) getOrElse e.toString)
+    }
   }
 }
 
-object BuiltinCons extends BuiltinCommon {
+object BuiltinCons extends NamedBuiltinImpl {
   def name = "cons"
-  def args = "2 arguments"
-  def body(vm: VM) = { case Seq(a, b) => vm.push(a Cons b) }
-}
-
-object BuiltinExit extends BuiltinCommon {
-  def name = "exit"
-  def args = "a number argument"
-  def body(vm: VM) = {
-    case Seq() => sys.exit()
-    case Seq(Num(n)) => sys.exit(n.toInt)
+  def run(vm: VM, args: Seq[Value]) = {
+    val (a, b) = takeTwo(args)
+    vm.push(Cons(a, b))
   }
 }
 
-object BuiltinError extends BuiltinCommon {
-  def name = "error"
-  def args = "a string argument"
-  def body(vm: VM) = { case Seq(str @ Str(_)) => throw new EvaluationError(str.toString) }
+object BuiltinExit extends NamedBuiltinImpl {
+  def name = "exit"
+  def run(vm: VM, args: Seq[Value]) = {
+    if (args.isEmpty) sys.exit()
+    val n = takeNum("exitcode", takeOne(args))
+    sys.exit(n.toInt)
+  }
 }
 
-final class BuiltinGensym extends BuiltinCommon {
+object BuiltinError extends NamedBuiltinImpl {
+  def name = "error"
+  def run(vm: VM, args: Seq[Value]) = {
+    if (args.isEmpty) throw new EvaluationError("error called")
+    val msg = takeStr("error message", takeOne(args))
+    throw new EvaluationError(Str.decode(msg))
+  }
+}
+
+final class BuiltinGensym extends NamedBuiltinImpl {
   private var id = 0
   def name = "gensym"
-  def args = "no arguments"
-  def body(vm: VM) = { case Seq() =>
+  def run(vm: VM, args: Seq[Value]) = {
+    takeNone(args)
     id += 1
     vm.push(Sym("#sym." + id))
   }
 }
 
-object BuiltinCar extends BuiltinCommon {
+object BuiltinCar extends NamedBuiltinImpl {
   def name = "car"
-  def args = "a cons"
-  def body(vm: VM) = { case Seq(a Cons _) => vm.push(a) }
+  def run(vm: VM, args: Seq[Value]) = {
+    val (a, _) = takeCons("cons", takeOne(args))
+    vm.push(a)
+  }
 }
 
-object BuiltinCdr extends BuiltinCommon {
+object BuiltinCdr extends NamedBuiltinImpl {
   def name = "cdr"
-  def args = "a cons"
-  def body(vm: VM) = { case Seq(_ Cons b) => vm.push(b) }
+  def run(vm: VM, args: Seq[Value]) = {
+    val (_, a) = takeCons("cons", takeOne(args))
+    vm.push(a)
+  }
 }
 
-object BuiltinApply extends BuiltinCommon {
+object BuiltinApply extends NamedBuiltinImpl {
   def name = "apply"
-  def args = "2 arguments"
-  def body(vm: VM) = { case Seq(f, List(args@ _*)) => vm.app(f, args: _*) }
+  def run(vm: VM, args: Seq[Value]) = {
+    val (f, fargs) = takeTwo(args)
+    val fseq = takeList("argument list", fargs)
+    vm.app(f, fseq: _*)
+  }
 }
 
-trait BuiltinTest extends BuiltinCommon {
-  def args = "1 argument"
+trait BuiltinTestImpl extends NamedBuiltinImpl {
   def test: PartialFunction[Value, Boolean]
-  def body(vm: VM) = { case Seq(a) =>
+  def run(vm: VM, args: Seq[Value]) = {
+    val a = takeOne(args)
     val result = if (test.isDefinedAt(a)) test(a) else false
     vm.push(Bool(result))
   }
 }
 
-object BuiltinTestNum extends BuiltinTest {
+object BuiltinTestNum extends BuiltinTestImpl {
   def name = "num?"
   def test = { case Num(_) => true }
 }
 
-object BuiltinTestSym extends BuiltinTest {
+object BuiltinTestSym extends BuiltinTestImpl {
   def name = "sym?"
   def test = { case Sym(_) => true }
 }
 
-object BuiltinTestStr extends BuiltinTest {
+object BuiltinTestStr extends BuiltinTestImpl {
   def name = "str?"
   def test = { case Str(_) => true }
 }
 
-object BuiltinTestCons extends BuiltinTest {
+object BuiltinTestCons extends BuiltinTestImpl {
   def name = "cons?"
   def test = { case _ Cons _ => true }
 }
 
-object BuiltinTestNil extends BuiltinTest {
+object BuiltinTestNil extends BuiltinTestImpl {
   def name = "nil?"
   def test = { case Nil => true }
 }
 
-object BuiltinTestBool extends BuiltinTest {
+object BuiltinTestBool extends BuiltinTestImpl {
   def name = "bool?"
   def test = { case Bool(_) => true }
 }
 
-object BuiltinTestProc extends BuiltinTest {
+object BuiltinTestProc extends BuiltinTestImpl {
   def name = "proc?"
   def test = { case Pure(p) => p.isProc }
 }
 
-object BuiltinTestMeta extends BuiltinTest {
+object BuiltinTestMeta extends BuiltinTestImpl {
   def name = "meta?"
   def test = { case Pure(p) => p.isMeta }
 }
 
-trait BuiltinArithmetic extends NamedBuiltinImpl {
+object BuiltinTestPort extends BuiltinTestImpl {
+  def name = "port?"
+  def test = { case Pure(p) => p.isPort }
+}
+
+object BuiltinTestVec extends BuiltinTestImpl {
+  def name = "vec?"
+  def test = { case Pure(p) => p.isVec }
+}
+
+trait BuiltinArithmeticImpl extends NamedBuiltinImpl {
   def zero: Option[Double]
   def one: Double => Double
   def fold: (Double, Double) => Double
 
-  def run(vm: VM, ls: Seq[Value]): Unit = extractNumbers(ls) match {
+  def run(vm: VM, ls: Seq[Value]): Unit = ls match {
     case Seq() => zero match {
       case Some(num) => vm.push(Num(num))
-      case None => throw new EvaluationError(s"Operator $name takes at least one argument")
+      case None => throw new EvaluationError(s"$name takes at least one argument")
     }
-    case Seq(num) => vm.push(Num(one(num)))
-    case head +: tail => vm.push(Num(tail.foldLeft(head)(fold)))
+    case Seq(num) => vm.push(Num(one(takeNum("number", num))))
+    case head +: tail => {
+      val a = takeNum("number", head)
+      val bs = tail.map(takeNum("number", _))
+      vm.push(Num(bs.foldLeft(a)(fold)))
+    }
   }
 }
 
-object BuiltinAdd extends BuiltinArithmetic {
+object BuiltinAdd extends BuiltinArithmeticImpl {
   def name = "+"
   def zero = Some(0)
   def one = +_
   def fold = _ + _
 }
 
-object BuiltinSub extends BuiltinArithmetic {
+object BuiltinSub extends BuiltinArithmeticImpl {
   def name = "-"
   def zero = None
   def one = -_
   def fold = _ - _
 }
 
-object BuiltinMul extends BuiltinArithmetic {
+object BuiltinMul extends BuiltinArithmeticImpl {
   def name = "*"
   def zero = Some(1)
   def one = +_
   def fold = _ * _
 }
 
-object BuiltinDiv extends BuiltinArithmetic {
+object BuiltinDiv extends BuiltinArithmeticImpl {
   def name = "/"
   def zero = None
   def one = 1 / _
   def fold = _ / _
 }
 
-object BuiltinMod extends BuiltinArithmetic {
+object BuiltinMod extends BuiltinArithmeticImpl {
   def name = "%"
   def zero = None
   def one = +_
   def fold = _ % _
-}
-
-object BuiltinConcat extends NamedBuiltinImpl {
-  def name = "concat"
-
-  def run(vm: VM, ls: Seq[Value]): Unit = {
-    val strs = extractStrings(ls)
-    val buf = ByteBuffer.allocate(strs.map(_.length).sum)
-    for (str <- strs) buf.put(str)
-    vm.push(Str(buf.array))
-  }
-}
-
-object BuiltinLength extends BuiltinCommon {
-  def name = "length"
-  def args = "a string argument"
-  def body(vm: VM) = { case Seq(Str(str)) => vm.push(Num(str.length)) }
 }
 
 object BuiltinEq extends NamedBuiltinImpl {
@@ -266,111 +330,334 @@ object BuiltinEq extends NamedBuiltinImpl {
   }
 }
 
-trait BuiltinCompare extends NamedBuiltinImpl {
+trait BuiltinCompareImpl extends NamedBuiltinImpl {
   def compare[A: Ordering](a: A, b: A): Boolean
 
   def compareAll[A: Ordering](a: A, bs: Seq[A]): Boolean = {
     (a +: bs).zip(bs).forall { case (l, r) => compare(l, r) }
   }
 
-  def run(vm: VM, ls: Seq[Value]): Unit = ls match {
+  def run(vm: VM, args: Seq[Value]): Unit = args match {
     case Seq() => vm.push(True)
     case Num(a) +: ls => {
-      val bs = extractNumbers(ls)
+      val bs = ls.map(takeNum("number", _))
       vm.push(Bool(compareAll(a, bs)))
     }
     case Str(a) +: ls => {
       import scala.math.Ordering.Implicits.seqDerivedOrdering
-      val bs = extractStrings(ls).map(_.toSeq)
+      val bs = ls.map(takeStr("string", _).toSeq)
       vm.push(Bool(compareAll(a.toSeq, bs)))
     }
-    case _ => throw new EvaluationError(s"Operator $name is only defined for strings and numbers")
+    case _ => throw new EvaluationError(s"$name is only defined for strings or numbers")
   }
 }
 
-object BuiltinLt extends BuiltinCompare {
+object BuiltinLt extends BuiltinCompareImpl {
   def name = "<"
   def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].lt(a, b)
 }
 
-object BuiltinGt extends BuiltinCompare {
+object BuiltinGt extends BuiltinCompareImpl {
   def name = ">"
   def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].gt(a, b)
 }
 
-object BuiltinLe extends BuiltinCompare {
+object BuiltinLe extends BuiltinCompareImpl {
   def name = "<="
   def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].lteq(a, b)
 }
 
-object BuiltinGe extends BuiltinCompare {
+object BuiltinGe extends BuiltinCompareImpl {
   def name = ">="
   def compare[A: Ordering](a: A, b: A) = implicitly[Ordering[A]].gteq(a, b)
 }
 
-object BuiltinCallCC extends BuiltinCommon {
+object BuiltinCallCC extends NamedBuiltinImpl {
   def name = "call/cc"
-  def args = "one argument"
-  def body(vm: VM) = { case Seq(f) =>
+  def run(vm: VM, args: Seq[Value]) = {
+    val f = takeOne(args)
     val cont = vm.captureCont()
     vm.app(f, cont)
   }
 }
 
-object BuiltinEval extends BuiltinCommon {
+object BuiltinNever extends NamedBuiltinImpl {
+  def name = "never"
+  def run(vm: VM, args: Seq[Value]) = args match {
+    case f +: args => vm.appNever(f, args: _*)
+    case _ => throw new EvaluationError(s"$name takes at least one argument")
+  }
+}
+
+object BuiltinStr extends NamedBuiltinImpl {
+  def name = "str"
+  def run(vm: VM, args: Seq[Value]) = {
+    val bytes = args map { arg =>
+      val num = takeNum("byte", arg)
+      if (num < 0 || 255 < num) throw new EvaluationError("Each byte of string must be inside the range 0-255")
+      num.toByte
+    }
+  vm.push(Str(bytes.toArray))
+  }
+}
+
+object BuiltinStrRef extends NamedBuiltinImpl {
+  def name = "str-ref"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (s, i) = takeTwo(args)
+    val str = takeStr("string", s)
+    val index = takeNum("index", i).toInt
+    vm.push(if (index < 0 || str.length <= index) Nil else Num(str(index).toInt & 0xff))
+  }
+}
+
+object BuiltinStrBytesize extends NamedBuiltinImpl {
+  def name = "str-bytesize"
+  def run(vm: VM, args: Seq[Value]) = {
+    val str = takeStr("string", takeOne(args))
+    vm.push(Num(str.length))
+  }
+}
+
+object BuiltinStrConcat extends NamedBuiltinImpl {
+  def name = "str-concat"
+  def run(vm: VM, args: Seq[Value]) = {
+    val strs = args.map(takeStr("string", _))
+    val buf = ByteBuffer.allocate(strs.map(_.length).sum)
+    for (str <- strs) buf.put(str)
+    vm.push(Str(buf.array))
+  }
+}
+
+object BuiltinSubstr extends NamedBuiltinImpl {
+  def name = "substr"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (s, i, l) = takeThree(args)
+    val str = takeStr("string", s)
+    val index = takeNum("index", i).toInt
+    val size = takeNum("size", l).toInt
+    if (index < 0 || str.length < index+size) throw new EvaluationError("Index out of range")
+    vm.push(Str(str.slice(index, index+size)))
+  }
+}
+
+object BuiltinSymToStr extends NamedBuiltinImpl {
+  def name = "sym->str"
+  def run(vm: VM, args: Seq[Value]) = {
+    val arg = takeOne(args)
+    val s = takeSym("symbol", arg)
+    vm.push(Str.fromString(s))
+  }
+}
+
+object BuiltinNumToStr extends NamedBuiltinImpl {
+  def name = "num->str"
+  def run(vm: VM, args: Seq[Value]) = {
+    val arg = takeOne(args)
+    val n = takeNum("number", arg)
+    vm.push(Str.fromString(Num(n).inspect))
+  }
+}
+
+object BuiltinStrToNum extends NamedBuiltinImpl {
+  def name = "str->num"
+  def run(vm: VM, args: Seq[Value]) = {
+    val arg = takeOne(args)
+    val s = Str.decode(takeStr("string", arg))
+    vm.push(TryEval(s.toDouble).fold(_ => Nil, Num.apply))
+  }
+}
+
+object BuiltinVec extends NamedBuiltinImpl {
+  def name = "vec"
+  def run(vm: VM, args: Seq[Value]) = {
+    vm.push(Pure(Vec(args.toArray)))
+  }
+}
+
+object BuiltinVecMake extends NamedBuiltinImpl {
+  def name = "vec-make"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (i, init) = takeTwo(args)
+    val length = takeNum("length", i).toInt
+    val array = new Array[Value](length)
+    for (i <- array.indices) array(i) = init
+    vm.push(Pure(Vec(array)))
+  }
+}
+
+object BuiltinVecRef extends NamedBuiltinImpl {
+  def name = "vec-ref"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (v, n) = takeTwo(args)
+    val vec = takeVec("vector", v)
+    val index = takeNum("index", n).toInt
+    vm.push(if (index < 0 || vec.size <= index) Nil else vec(index))
+  }
+}
+
+object BuiltinVecLength extends NamedBuiltinImpl {
+  def name = "vec-length"
+  def run(vm: VM, args: Seq[Value]) = {
+    val v = takeOne(args)
+    val vec = takeVec("vector", v)
+    vm.push(Num(vec.length))
+  }
+}
+
+object BuiltinVecSet extends NamedBuiltinImpl {
+  def name = "vec-set!"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (v, n, item) = takeThree(args)
+    val vec = takeVec("vector", v)
+    val index = takeNum("index", n).toInt
+    if (index < 0 || vec.length <= index) throw new EvaluationError("Index out of range")
+    vec(index) = item
+    vm.push(Nil)
+  }
+}
+
+object BuiltinVecCopy extends NamedBuiltinImpl {
+  def name = "vec-copy!"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (dest, destS, src, srcS, l) = takeFive(args)
+    val destVec = takeVec("destination vector", dest)
+    val destStart = takeNum("destination index", destS).toInt
+    val srcVec = takeVec("source vector", src)
+    val srcStart = takeNum("source index", srcS).toInt
+    val length = takeNum("length", l).toInt
+
+    if (0 <= srcStart && srcStart+length <= srcVec.length && 0 <= destStart && destStart+length <= destVec.length) {
+      srcVec.drop(srcStart).copyToArray(destVec, destStart, length)
+      vm.push(Nil)
+    } else {
+      throw new EvaluationError("Index out of range")
+    }
+  }
+}
+
+object BuiltinClose extends NamedBuiltinImpl {
+  def name = "close"
+  def run(vm: VM, args: Seq[Value]) = {
+    val p = takeOne(args)
+    val port = takePort("port", p)
+    port.close() match {
+      case Right(_) => vm.push(Cons(True, Nil))
+      case Left(e) => vm.push(Cons(False, Str.fromString(e)))
+    }
+  }
+}
+
+class BuiltinPortImpl(val name: String, val portImpl: PortImpl) extends NamedBuiltinImpl {
+  def run(vm: VM, args: Seq[Value]) = {
+    takeNone(args)
+    vm.push(Pure(Port(portImpl)))
+  }
+}
+
+object BuiltinReadByte extends NamedBuiltinImpl {
+  def name = "read-byte"
+  def run(vm: VM, args: Seq[Value]) = {
+    val p = takeOne(args)
+    val r = takePortIn("port", p)
+    vm.push(readResult(r.readByte)(v => Num(v.toInt & 0xff)))
+  }
+}
+
+object BuiltinReadStr extends NamedBuiltinImpl {
+  def name = "read-str"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (s, p) = takeTwo(args)
+    val size = takeNum("size", s).toInt
+    val r = takePortIn("port", p)
+    vm.push(readResult(r.readBytes(size))(Str.apply))
+  }
+}
+
+object BuiltinReadLine extends NamedBuiltinImpl {
+  def name = "read-line"
+  def run(vm: VM, args: Seq[Value]) = {
+    val p = takeOne(args)
+    val r = takePortIn("port", p)
+    vm.push(readResult(r.readLine)(Str.apply))
+  }
+}
+
+object BuiltinWriteByte extends NamedBuiltinImpl {
+  def name = "write-byte"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (b, p) = takeTwo(args)
+    val w = takePortOut("port", p)
+    val byte = takeNum("byte", b).toByte
+    vm.push(writeResult(w.writeByte(byte)))
+  }
+}
+
+object BuiltinWriteStr extends NamedBuiltinImpl {
+  def name = "write-str"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (s, p) = takeTwo(args)
+    val w = takePortOut("port", p)
+    val str = takeStr("string", s)
+    vm.push(writeResult(w.writeBytes(str)))
+  }
+}
+
+object BuiltinWriteLine extends NamedBuiltinImpl {
+  def name = "write-line"
+  def run(vm: VM, args: Seq[Value]) = {
+    val (s, p) = takeTwo(args)
+    val w = takePortOut("port", p)
+    val str = takeStr("string", s)
+    vm.push(writeResult(w.writeLine(str)))
+  }
+}
+
+object BuiltinFlush extends NamedBuiltinImpl {
+  def name = "flush"
+  def run(vm: VM, args: Seq[Value]) = {
+    val p = takeOne(args)
+    val w = takePortOut("port", p)
+    vm.push(writeResult(w.flush))
+  }
+}
+
+final class BuiltinArgs(val envArgs: Seq[String]) extends NamedBuiltinImpl {
+  def name = "args"
+  def run(vm: VM, args: Seq[Value]) = {
+    takeNone(args)
+    vm.push(List(envArgs.map(Str.fromString(_)): _*))
+  }
+}
+
+object BuiltinEval extends NamedBuiltinImpl {
   def name = "eval"
-  def args = "an expression"
-  def body(vm: VM) = { case Seq(e) =>
+  def run(vm: VM, args: Seq[Value]) = {
+    val e = takeOne(args)
     vm.context(_.eval(e)) match {
       case Right(v) => vm.push(Cons(True, v))
-      case Left(e) => vm.push(Cons(False, Str(e)))
+      case Left(e) => vm.push(Cons(False, Str.fromString(e)))
     }
   }
 }
 
-trait BuiltinMacroExpand extends BuiltinCommon {
-  def args = "an expression"
+trait BuiltinMacroExpandImpl extends NamedBuiltinImpl {
   def recurse: Boolean
-  def body(vm: VM) = { case Seq(e) =>
+  def run(vm: VM, args: Seq[Value]) = {
+    val e = takeOne(args)
     vm.context(_.macroExpand(recurse, e)) match {
       case Right(v) => vm.push(Cons(True, v))
-      case Left(e) => vm.push(Cons(False, Str(e)))
+      case Left(e) => vm.push(Cons(False, Str.fromString(e)))
     }
   }
 }
 
-object BuiltinMacroExpandAll extends BuiltinMacroExpand {
+object BuiltinMacroExpand extends BuiltinMacroExpandImpl {
   def name = "macroexpand"
   def recurse = true
 }
 
-object BuiltinMacroExpandOnce extends BuiltinMacroExpand {
+object BuiltinMacroExpandOnce extends BuiltinMacroExpandImpl {
   def name = "macroexpand-1"
   def recurse = false
-}
-
-object BuiltinPrint extends NamedBuiltinImpl {
-  def name = "print"
-  def run(vm: VM, ls: Seq[Value]): Unit = {
-    ls foreach {
-      case str @ Str(_) => print(str.toString)
-      case s => throw new EvaluationError("Cannot print non-string argument: " + s.inspect)
-    }
-    vm.push(Nil)
-  }
-}
-
-object BuiltinNewline extends BuiltinCommon {
-  def name = "newline"
-  def args = "no arguments"
-  def body(vm: VM) = { case Seq() =>
-    println()
-    vm.push(Nil)
-  }
-}
-
-object BuiltinInspect extends BuiltinCommon {
-  def name = "inspect"
-  def args = "one argument"
-  def body(vm: VM) = { case Seq(a) => vm.push(Str(a.inspect)) }
 }

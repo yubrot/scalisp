@@ -3,6 +3,8 @@ package scalisp
 abstract sealed class Native extends Inspect {
   def isProc(): Boolean = false
   def isMeta(): Boolean = false
+  def isPort(): Boolean = false
+  def isVec(): Boolean = false
 }
 
 private[scalisp]
@@ -27,4 +29,16 @@ private[scalisp]
 case class Syntax(impl: SyntaxImpl) extends Native {
   override def isMeta(): Boolean = true
   def inspect(): String = "<syntax>"
+}
+
+private[scalisp]
+case class Vec(val payload: Array[Value]) extends Native {
+  override def isVec(): Boolean = true
+  def inspect(): String = (Sym("vec") Cons List(payload: _*)).inspect
+}
+
+private[scalisp]
+case class Port(val impl: PortImpl) extends Native {
+  override def isPort(): Boolean = true
+  def inspect(): String = "<port>"
 }

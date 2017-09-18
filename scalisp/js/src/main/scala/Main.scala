@@ -2,60 +2,76 @@ package scalisp
 
 import fastparse.core.Parsed._
 import scala.scalajs.js
-import js.annotation.JSExport
+import js.annotation._
 import js.JSConverters._
 
-class Interrupt extends Exception
+@JSExportTopLevel("scalisp")
+object Scalisp {
+  @JSExport
+  var stdout: js.Function1[js.Array[Byte], Unit] = bytes => Console.print(Str.decode(bytes.toArray))
 
-@JSExport
-object Main {
-  private def failure(e: String): Nothing = {
-    Console.err.println(e)
-    throw new Interrupt
-  }
+  @JSExport
+  var stderr: js.Function1[js.Array[Byte], Unit] = bytes => Console.err.print(Str.decode(bytes.toArray))
 
-  private def mayFailure[A](me: Either[String, A]): A = me match {
-    case Left(e) => failure(e)
+  def out(bytes: Array[Byte]): Unit = stdout(bytes.toJSArray)
+
+  def err(bytes: Array[Byte]): Unit = stderr(bytes.toJSArray)
+
+  private def tryEval[A](me: Either[String, A]): A = me match {
     case Right(a) => a
-  }
-
-  @JSExport
-  def printValue(value: Value): Unit = println(value.inspect)
-
-  @JSExport
-  def printCode(code: Code): Unit = println(CodePrinter.print(code))
-
-  @JSExport
-  def createContext(boot: Program): Context = {
-    val context = new Context
-    Builtins.register(context)
-    exec(context, boot)
-    context
+    case Left(e) => throw new js.JavaScriptException(e)
   }
 
   type Program = js.Array[Value]
 
   @JSExport
+  def createContext(): Context = new Context
+
+  @JSExport
+  def initContext(context: Context, bootProgram: Program): Unit = {
+    JSBuiltins.register(context)
+    if (bootProgram != null) exec(context, bootProgram)
+  }
+
+  @JSExport
   def parse(code: String): Program = {
     Parser.program.parse(code) match {
       case Success(program, _) => (program: Seq[Value]).toJSArray
-      case _ => failure("Parse error")
+      case _ => throw new js.JavaScriptException("Parse error")
     }
   }
 
   @JSExport
-  def macroExpand(context: Context, recurse: Boolean, value: Value): Value = mayFailure(context(_.macroExpand(recurse, value)))
+  def exec(context: Context, program: Program): Unit = {
+    for (line <- program) tryEval {
+      context(_.eval(line))
+    }
+  }
 
   @JSExport
-  def compile(context: Context, value: Value): Code = mayFailure(context(_.compile(value)))
+  def macroExpand(context: Context, recurse: Boolean, value: Value): Value = tryEval {
+    context(_.macroExpand(recurse, value))
+  }
 
   @JSExport
-  def exec(context: Context, program: Program): Unit = for (line <- program) mayFailure(context(_.eval(line)))
+  def compile(context: Context, value: Value): Code = tryEval {
+    context(_.compile(value))
+  }
 
   @JSExport
   def runTests(test: String): Unit = {
     val context = new Context
-    Builtins.register(context)
-    TestRunner.run(context, test.lines, true)
+    JSBuiltins.register(context)
+    TestRunner.run(
+      context,
+      test.lines,
+      s => out(Str.encode(s + "\n")),
+      s => err(Str.encode(s + "\n")))
   }
+
+  @JSExport
+  def inspectValue(value: Value): String = value.inspect
+
+  @JSExport
+  def printCode(code: Code): String = CodePrinter.print(code)
 }

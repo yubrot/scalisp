@@ -1,67 +1,92 @@
 window.onload = function() {
   var $ = document.getElementById.bind(document);
-  var api = scalisp.Main();
-  var boot = null;
+  var bootProgram = null;
 
   var $input = $('input');
   var $output = $('output');
 
-  function macroExpand() {
-    $output.innerHTML = '';
-    var ctx = api.createContext(boot);
-    var program = api.parse($input.value);
-    for (var i=0; i<program.length; ++i) {
-      var s = api.macroExpand(ctx, true, program[i]);
-      api.printValue(s);
+  var vconsole = {
+    escape: function(s) {
+      var tags = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+      return s.replace(/[&<>]/g, tag => tags[tag] || tag);
+    },
+    clear: function() {
+      $output.innerHTML = '';
+    },
+    out: function(s) {
+      $output.innerHTML = $output.innerHTML + this.escape(s);
+    },
+    err: function(s) {
+      $output.innerHTML = $output.innerHTML + '<span class="error">' + this.escape(s) + '</span>';
+    },
+  };
+
+  scalisp.stdout = bytes => vconsole.out(String.fromCharCode.apply(String, bytes));
+  scalisp.stderr = bytes => vconsole.err(String.fromCharCode.apply(String, bytes));
+
+  function withContext(f) {
+    try {
+      var ctx = scalisp.createContext();
+      scalisp.initContext(ctx, bootProgram);
+      f(ctx);
+    } catch (e) {
+      vconsole.err(e + '\n');
     }
+  }
+
+  function macroExpand() {
+    vconsole.clear();
+    withContext(ctx => {
+      var program = scalisp.parse($input.value);
+      for (var i=0; i<program.length; ++i) {
+        var s = scalisp.macroExpand(ctx, true, program[i]);
+        vconsole.out(scalisp.inspectValue(s) + "\n");
+      }
+    });
   }
 
   function compile() {
-    $output.innerHTML = '';
-    var ctx = api.createContext(boot);
-    var program = api.parse($input.value);
-    for (var i=0; i<program.length; ++i) {
-      var s = api.macroExpand(ctx, true, program[i]);
-      var c = api.compile(ctx, s);
-      api.printCode(c);
-    }
+    vconsole.clear();
+    withContext(ctx => {
+      var program = scalisp.parse($input.value);
+      for (var i=0; i<program.length; ++i) {
+        if (i != 0) vconsole.out("------\n");
+        var s = scalisp.macroExpand(ctx, true, program[i]);
+        var c = scalisp.compile(ctx, s);
+        vconsole.out(scalisp.printCode(c));
+      }
+    });
   }
 
   function run() {
-    $output.innerHTML = '';
-    var ctx = api.createContext(boot);
-    var program = api.parse($input.value);
-    api.exec(ctx, program);
+    vconsole.clear();
+    withContext(ctx => {
+      var program = scalisp.parse($input.value);
+      scalisp.exec(ctx, program);
+    });
   }
 
   function runTests() {
-    $output.innerHTML = 'loading testcases...';
-    load('./lispboot/test', function(text) {
-      $output.innerHTML = '';
-      api.runTests(text);
+    vconsole.clear();
+    vconsole.out('loading testcases...\n');
+    load('./lispboot/test', text => {
+      vconsole.clear();
+      scalisp.runTests(text);
     });
   }
 
   function loadExample(filename) {
-    $output.innerHTML = 'loading ' + filename + '...';
-    load('./lispboot/examples/' + filename, function(text) {
+    vconsole.clear();
+    vconsole.out('loading ' + filename + '\n');
+    load('./lispboot/examples/' + filename, text => {
+      vconsole.clear();
       $input.value = text;
-      $output.innerHTML = '';
     });
   }
 
-  console.log = function(msg) {
-    $output.innerHTML = $output.innerHTML + msg + "\n";
-  };
-
-  console.warn = console.error = function(msg) {
-    $output.innerHTML = $output.innerHTML + "<span class=\"error\">" + msg + "</span>\n";
-  };
-
-  $output.innerHTML = 'loading boot code...';
-
-  load('./lispboot/boot.lisp', function(bootCode) {
-    boot = api.parse(bootCode);
+  vconsole.out('loading bootProgram code...\n');
+  load('./lispboot/boot.lisp', bootCode => {
+    bootProgram = scalisp.parse(bootCode);
 
     $('examples').addEventListener('change', e => loadExample(e.target.value));
     $('macroexpand').addEventListener('click', macroExpand);
@@ -75,7 +100,7 @@ window.onload = function() {
 
 function load(filename, callback) {
   var xhr = new XMLHttpRequest();
-  xhr.onreadystatechange = function() {
+  xhr.onreadystatechange = () => {
     if (xhr.readyState != 4) return;
     if (xhr.status == 200) {
       callback(xhr.responseText);

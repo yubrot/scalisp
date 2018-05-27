@@ -67,11 +67,13 @@ window.onload = function() {
   }
 
   function runTests() {
+    var ctx = scalisp.createContext();
+    scalisp.initContext(ctx, null);
     vconsole.clear();
     vconsole.out('loading testcases...\n');
     load('./lispboot/test', text => {
       vconsole.clear();
-      scalisp.runTests(text);
+      scalisp.runTests(ctx, text);
     });
   }
 

@@ -1,8 +1,7 @@
 package scalisp
 
-object JSBuiltins extends Builtins {
+object IOBuiltins extends Builtins {
   def register(context: Context): Unit = {
-    super.register(context, Seq())
     put(context, BuiltinOpen)
     put(context, BuiltinStdin)
     put(context, BuiltinStdout)

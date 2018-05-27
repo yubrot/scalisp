@@ -8,10 +8,10 @@ import js.JSConverters._
 @JSExportTopLevel("scalisp")
 object Scalisp {
   @JSExport
-  var stdout: js.Function1[js.Array[Byte], Unit] = bytes => Console.print(Str.decode(bytes.toArray))
+  var stdout: js.Function1[js.Array[Byte], Unit] = (bytes: js.Array[Byte]) => Console.print(Str.decode(bytes.toArray))
 
   @JSExport
-  var stderr: js.Function1[js.Array[Byte], Unit] = bytes => Console.err.print(Str.decode(bytes.toArray))
+  var stderr: js.Function1[js.Array[Byte], Unit] = (bytes: js.Array[Byte]) => Console.err.print(Str.decode(bytes.toArray))
 
   def out(bytes: Array[Byte]): Unit = stdout(bytes.toJSArray)
 
@@ -29,7 +29,8 @@ object Scalisp {
 
   @JSExport
   def initContext(context: Context, bootProgram: Program): Unit = {
-    JSBuiltins.register(context)
+    CoreBuiltins.register(context, Seq())
+    IOBuiltins.register(context)
     if (bootProgram != null) exec(context, bootProgram)
   }
 
@@ -59,9 +60,7 @@ object Scalisp {
   }
 
   @JSExport
-  def runTests(test: String): Unit = {
-    val context = new Context
-    JSBuiltins.register(context)
+  def runTests(context: Context, test: String): Unit = {
     TestRunner.run(
       context,
       test.lines,

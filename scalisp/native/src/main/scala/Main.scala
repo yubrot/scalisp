@@ -4,18 +4,12 @@ import scala.io._
 import fastparse.core.Parsed._
 
 object Main {
-  implicit class SourceCompat(val source: Source.type) {
-    def fromResource(resource: String, classLoader: ClassLoader = Thread.currentThread().getContextClassLoader())(implicit codec: Codec): BufferedSource =
-      source.fromInputStream(classLoader.getResourceAsStream(resource))
-  }
-
   def main(args: Array[String]): Unit = {
     val context = new Context
 
     args.toSeq match {
       case Seq() =>
-        init(context, true, Seq())
-        repl(context)
+        Console.err.println("REPL on scalisp native is not supported yet :(")
       case "-test" +: tests =>
         init(context, false, Seq())
         for (test <- tests) TestRunner.run(context, Source.fromFile(test).getLines)
@@ -30,7 +24,7 @@ object Main {
     CoreBuiltins.register(context, args)
     IOBuiltins.register(context)
     if (boot) {
-      exec(context, Source.fromResource("boot.lisp").mkString) match {
+      exec(context, Source.fromFile("lispboot/boot.lisp").mkString) match {
         case Right(_) => {}
         case Left(e) => throw new RuntimeException(s"init: $e")
       }
@@ -54,22 +48,5 @@ object Main {
       case _ => Left("Parse error")
     }
     Right(())
-  }
-
-  def repl(context: Context): Unit = {
-    Console.err.println("[scalisp REPL]")
-    val in =
-      Iterator.continually(StdIn.readLine("> "))
-      .takeWhile(_ != null)
-      .flatMap(line => (line + "\n").split("")) // To accept strings such as "(+ 1 2) (* 3 4)"
-
-    while (true) Parser.line.parseIterator(in) match {
-      case Success(None, _) => return
-      case Success(Some(expr), _) => context(_.eval(expr)) match {
-        case Right(result) => Console.println(result.inspect)
-        case Left(e) => Console.err.println(e)
-      }
-      case _ => Console.err.println("Parse error")
-    }
   }
 }

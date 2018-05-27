@@ -4,9 +4,8 @@ import java.io.{InputStream, BufferedInputStream, OutputStream, BufferedOutputSt
 import java.nio.ByteBuffer
 import java.nio.file.{FileSystems, Files}
 
-object JVMBuiltins extends Builtins {
-  override def register(context: Context, args: Seq[String]): Unit = {
-    super.register(context, args)
+object IOBuiltins extends Builtins {
+  def register(context: Context): Unit = {
     put(context, BuiltinOpen)
     put(context, BuiltinStdin)
     put(context, BuiltinStdout)

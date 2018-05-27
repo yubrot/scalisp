@@ -7,7 +7,9 @@ trait Builtins {
   def put(context: Context, impl: NamedBuiltinImpl): Unit = {
     context.builtins(impl.name) = impl
   }
+}
 
+object CoreBuiltins extends Builtins {
   def register(context: Context, args: Seq[String]): Unit = {
     put(context, BuiltinCons)
 

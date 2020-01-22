@@ -7,7 +7,7 @@ object scalisp extends Module {
   def jvmSources = T.sources { pwd / "scalisp-jvm" }
   def nativeSources = T.sources { pwd / "scalisp-native" }
   def jsSources = T.sources { pwd / "scalisp-js" }
-  def lispbootSources = T.sources { pwd / "lispboot" / "boot.lisp" }
+  def bootstrappingSources = T.sources { pwd / "rosetta-lisp" / "boot.lisp" }
 
   trait Base extends ScalaModule {
     def scalaOptions = Seq("-deprecation", "-feature", "-unchecked", "-Xlint")
@@ -23,7 +23,7 @@ object scalisp extends Module {
     def bootCodes = T {
       val resources = pwd / "resources"
       mkdir(resources)
-      for (src <- lispbootSources()) cp.over(src.path, resources / src.path.last)
+      for (src <- bootstrappingSources()) cp.over(src.path, resources / src.path.last)
       Seq(PathRef(resources))
     }
   }

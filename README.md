@@ -1,19 +1,16 @@
 scalisp
 =======
 
-#### [Try it on browser](https://yubrot.github.io/scalisp/)
-
 scalisp is a Scala version of [Rosetta Lisp](https://github.com/yubrot/rosetta-lisp) implementation.
 
-    # Run on JVM
-    $ mill scalisp.jvm.assembly
-    $ java -jar out/scalisp/jvm/assembly/dest/out.jar rosetta-lisp/examples/conways-gol.lisp
+```bash
+$ sbt "cli/run ..."
 
-    # Run natively
-    $ mill scalisp.native.nativeLink
-    $ ./out/scalisp/native/nativeLink/dest/out rosetta-lisp/examples/conways-gol.lisp
+# .. or ..
 
-    # Run on Browser
-    $ git worktree add -b gh-pages gh-pages origin/gh-pages
-    $ mill scalisp.js.fastOpt
+$ sbt cli/assembly
+$ java -jar cli/target/scala-3.1.0/scalisp.jar ...
+```
+
+There is [an implementation that runs in the browser](https://yubrot.github.io/scalisp/), but it is written in Scala 2 and uses Scala.js. The current `main` branch is written in Scala 3 and supports only JVM, so if you are interested, please check the `scala-2` branch.
 

@@ -21,22 +21,22 @@ object Builtins:
 
     put(context, BuiltinApply)
 
-    put(context, BuiltinTestNum)
-    put(context, BuiltinTestSym)
-    put(context, BuiltinTestStr)
-    put(context, BuiltinTestCons)
-    put(context, BuiltinTestNil)
-    put(context, BuiltinTestBool)
-    put(context, BuiltinTestProc)
-    put(context, BuiltinTestMeta)
-    put(context, BuiltinTestPort)
-    put(context, BuiltinTestVec)
+    put(context, builtinTestNum)
+    put(context, builtinTestSym)
+    put(context, builtinTestStr)
+    put(context, builtinTestCons)
+    put(context, builtinTestNil)
+    put(context, builtinTestBool)
+    put(context, builtinTestProc)
+    put(context, builtinTestMeta)
+    put(context, builtinTestPort)
+    put(context, builtinTestVec)
 
-    put(context, BuiltinAdd)
-    put(context, BuiltinSub)
-    put(context, BuiltinMul)
-    put(context, BuiltinDiv)
-    put(context, BuiltinMod)
+    put(context, builtinAdd)
+    put(context, builtinSub)
+    put(context, builtinMul)
+    put(context, builtinDiv)
+    put(context, builtinMod)
 
     put(context, BuiltinEq)
     put(context, BuiltinLt)
@@ -144,58 +144,29 @@ object BuiltinApply extends CommonBuiltinImpl:
     val (f, fargs) = take[(Value, Seq[Value])](args)
     vm.app(f, fargs: _*)
 
-trait BuiltinTestImpl extends CommonBuiltinImpl:
-  def test: PartialFunction[Value, Boolean]
+class BuiltinTestImpl(val name: String)(test: PartialFunction[Value, Boolean]) extends CommonBuiltinImpl:
   def run(vm: VM, args: Seq[Value]) =
     val a = take[Value](args)
     val result = if test isDefinedAt a then test(a) else false
     vm.push(Sexp.Bool(result))
 
-object BuiltinTestNum extends BuiltinTestImpl:
-  def name = "num?"
-  def test = { case Sexp.Num(_) => true }
+lazy val builtinTestNum = BuiltinTestImpl("num?") { case Sexp.Num(_) => true }
+lazy val builtinTestSym = BuiltinTestImpl("sym?") { case Sexp.Sym(_) => true }
+lazy val builtinTestStr = BuiltinTestImpl("str?") { case Sexp.Str(_) => true }
+lazy val builtinTestCons = BuiltinTestImpl("cons?") { case Sexp.Cons(_, _) => true }
+lazy val builtinTestNil = BuiltinTestImpl("nil?") { case Sexp.Nil => true }
+lazy val builtinTestBool = BuiltinTestImpl("bool?") { case Sexp.Bool(_) => true }
+lazy val builtinTestProc = BuiltinTestImpl("proc?") { case Sexp.Pure(p) => p.isProc }
+lazy val builtinTestMeta = BuiltinTestImpl("meta?") { case Sexp.Pure(p) => p.isMeta }
+lazy val builtinTestPort = BuiltinTestImpl("port?") { case Sexp.Pure(p) => p.isPort }
+lazy val builtinTestVec = BuiltinTestImpl("vec?") { case Sexp.Pure(p) => p.isVec }
 
-object BuiltinTestSym extends BuiltinTestImpl:
-  def name = "sym?"
-  def test = { case Sexp.Sym(_) => true }
-
-object BuiltinTestStr extends BuiltinTestImpl:
-  def name = "str?"
-  def test = { case Sexp.Str(_) => true }
-
-object BuiltinTestCons extends BuiltinTestImpl:
-  def name = "cons?"
-  def test = { case Sexp.Cons(_, _) => true }
-
-object BuiltinTestNil extends BuiltinTestImpl:
-  def name = "nil?"
-  def test = { case Sexp.Nil => true }
-
-object BuiltinTestBool extends BuiltinTestImpl:
-  def name = "bool?"
-  def test = { case Sexp.Bool(_) => true }
-
-object BuiltinTestProc extends BuiltinTestImpl:
-  def name = "proc?"
-  def test = { case Sexp.Pure(p) => p.isProc }
-
-object BuiltinTestMeta extends BuiltinTestImpl:
-  def name = "meta?"
-  def test = { case Sexp.Pure(p) => p.isMeta }
-
-object BuiltinTestPort extends BuiltinTestImpl:
-  def name = "port?"
-  def test = { case Sexp.Pure(p) => p.isPort }
-
-object BuiltinTestVec extends BuiltinTestImpl:
-  def name = "vec?"
-  def test = { case Sexp.Pure(p) => p.isVec }
-
-trait BuiltinArithmeticImpl extends CommonBuiltinImpl:
-  def zero: Option[Double]
-  def one: Double => Double
-  def fold: (Double, Double) => Double
-
+class BuiltinArithmeticImpl(
+    val name: String,
+    zero: Option[Double],
+    one: Double => Double,
+    fold: (Double, Double) => Double
+) extends CommonBuiltinImpl:
   def run(vm: VM, args: Seq[Value]): Unit = args.length match
     case 0 =>
       zero match
@@ -208,35 +179,11 @@ trait BuiltinArithmeticImpl extends CommonBuiltinImpl:
       val (a, Rest(bs)) = take[(Double, Rest[Double])](args)
       vm.push(Sexp.Num(bs.foldLeft(a)(fold)))
 
-object BuiltinAdd extends BuiltinArithmeticImpl:
-  def name = "+"
-  def zero = Some(0)
-  def one = +_
-  def fold = _ + _
-
-object BuiltinSub extends BuiltinArithmeticImpl:
-  def name = "-"
-  def zero = None
-  def one = -_
-  def fold = _ - _
-
-object BuiltinMul extends BuiltinArithmeticImpl:
-  def name = "*"
-  def zero = Some(1)
-  def one = +_
-  def fold = _ * _
-
-object BuiltinDiv extends BuiltinArithmeticImpl:
-  def name = "/"
-  def zero = None
-  def one = 1 / _
-  def fold = _ / _
-
-object BuiltinMod extends BuiltinArithmeticImpl:
-  def name = "%"
-  def zero = None
-  def one = +_
-  def fold = _ % _
+lazy val builtinAdd = BuiltinArithmeticImpl("+", Some(0), +_, _ + _)
+lazy val builtinSub = BuiltinArithmeticImpl("-", None, -_, _ - _)
+lazy val builtinMul = BuiltinArithmeticImpl("*", Some(1), +_, _ * _)
+lazy val builtinDiv = BuiltinArithmeticImpl("/", None, 1 / _, _ / _)
+lazy val builtinMod = BuiltinArithmeticImpl("%", None, +_, _ % _)
 
 object BuiltinEq extends CommonBuiltinImpl:
   def name = "="

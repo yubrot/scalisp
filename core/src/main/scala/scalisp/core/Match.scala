@@ -10,19 +10,19 @@ given MatchArg[Value] with
   def signature: String = "value"
   def matchArg(arg: Value): Option[Value] = Some(arg)
 
-class MatchArgByCast[T](sig: String, cast: PartialFunction[Value, T]) extends MatchArg[T]:
+class MatchArgByCast[T](sig: String)(cast: PartialFunction[Value, T]) extends MatchArg[T]:
   def signature: String = sig
   def matchArg(arg: Value): Option[T] = if cast isDefinedAt arg then Some(cast(arg)) else None
 
-given MatchArg[Sexp.Num] = MatchArgByCast("num", { case num @ Sexp.Num(_) => num })
-given MatchArg[Double] = MatchArgByCast("num", { case Sexp.Num(num) => num })
-given MatchArg[Int] = MatchArgByCast("num", { case Sexp.Num(num) => num.toInt })
-given MatchArg[Sexp.Sym] = MatchArgByCast("sym", { case sym @ Sexp.Sym(_) => sym })
-given MatchArg[Sexp.Str] = MatchArgByCast("str", { case str @ Sexp.Str(_) => str })
-given MatchArg[String] = MatchArgByCast("str", { case str @ Sexp.Str(_) => str.toString })
-given MatchArg[Sexp.Cons[Native]] = MatchArgByCast("cons", { case cons @ Sexp.Cons(_, _) => cons })
-given MatchArg[Native.Port] = MatchArgByCast("port", { case Sexp.Pure(port @ Native.Port(_)) => port })
-given MatchArg[Native.Vec] = MatchArgByCast("vec", { case Sexp.Pure(vec @ Native.Vec(_)) => vec })
+given MatchArg[Sexp.Num] = MatchArgByCast("num") { case num @ Sexp.Num(_) => num }
+given MatchArg[Double] = MatchArgByCast("num") { case Sexp.Num(num) => num }
+given MatchArg[Int] = MatchArgByCast("num") { case Sexp.Num(num) => num.toInt }
+given MatchArg[Sexp.Sym] = MatchArgByCast("sym") { case sym @ Sexp.Sym(_) => sym }
+given MatchArg[Sexp.Str] = MatchArgByCast("str") { case str @ Sexp.Str(_) => str }
+given MatchArg[String] = MatchArgByCast("str") { case str @ Sexp.Str(_) => str.toString }
+given MatchArg[Sexp.Cons[Native]] = MatchArgByCast("cons") { case cons @ Sexp.Cons(_, _) => cons }
+given MatchArg[Native.Port] = MatchArgByCast("port") { case Sexp.Pure(port @ Native.Port(_)) => port }
+given MatchArg[Native.Vec] = MatchArgByCast("vec") { case Sexp.Pure(vec @ Native.Vec(_)) => vec }
 
 given [T: MatchArg]: MatchArg[Seq[T]] with
   def signature: String =

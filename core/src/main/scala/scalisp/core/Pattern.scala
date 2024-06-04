@@ -15,7 +15,7 @@ case class Pattern(fixed: Seq[String], rest: Option[String]):
 
 object Pattern:
   def apply(pat: Sexp[? <: Inspect]): Pattern =
-    val Some((init, last)) = Sexp.ListLike.unapply(pat)
+    val Some((init, last)) = Sexp.ListLike.unapply(pat): @unchecked
     val fixed = init map {
       case Sexp.Sym(sym) => sym
       case a             => throw EvaluationError("Unsupported pattern: " + a.inspect)

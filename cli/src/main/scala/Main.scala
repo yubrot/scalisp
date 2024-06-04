@@ -2,6 +2,7 @@ package scalisp.cli
 
 import scalisp.core.{Context, Builtins, Parser, TestRunner}
 import scala.io.{Source, StdIn}
+import scala.util.boundary
 
 object Main:
   def main(args: Array[String]): Unit =
@@ -33,10 +34,11 @@ object Main:
   def exec(context: Context, code: String): Either[String, Unit] =
     Parser.program.parse(code) match
       case Right(_, program) =>
-        for line <- program do
-          context { _.eval(line) } match
-            case Right(_) => {}
-            case Left(e)  => return Left(e)
+        boundary:
+          for line <- program do
+            context { _.eval(line) } match
+              case Right(_) => {}
+              case Left(e)  => boundary.break(Left(e))
       case _ => Left("Parse error")
     Right(())
 

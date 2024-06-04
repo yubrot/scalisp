@@ -1,9 +1,5 @@
 package scalisp.core
 
-import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
-import java.nio.charset.Charset
-
 trait Inspect:
   def inspect: String
 

@@ -1,7 +1,5 @@
 package scalisp.core
 
-import java.io.{InputStream, BufferedInputStream, OutputStream, BufferedOutputStream}
-import java.nio.ByteBuffer
 import java.nio.file.{FileSystems, Files, Paths}
 import scala.util.control.NonFatal
 import scala.io.Source
@@ -243,7 +241,9 @@ object BuiltinStr extends CommonBuiltinImpl:
     val Rest(nums) = take[Rest[Double]](args)
     val chars = nums map { num =>
       if num < Char.MinValue || Char.MaxValue < num then
-        throw EvaluationError("Each byte of string must be inside the range 0-255")
+        throw EvaluationError(
+          f"Each character of string must be inside the range ${Char.MinValue.toInt}-${Char.MaxValue.toInt}"
+        )
       num.toChar
     }
     vm.push(Sexp.Str(chars.mkString))

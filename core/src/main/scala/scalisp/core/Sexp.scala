@@ -10,7 +10,7 @@ trait Inspect:
 enum Sexp[+A <: Inspect] extends Inspect:
   case Num(data: Double) extends Sexp[Nothing]
   case Sym(data: String) extends Sexp[Nothing]
-  case Str(data: Array[Byte]) extends Sexp[Nothing]
+  case Str(data: String) extends Sexp[Nothing]
   case True extends Sexp[Nothing]
   case False extends Sexp[Nothing]
   case Cons(car: Sexp[A], cdr: Sexp[A]) extends Sexp[A]
@@ -29,7 +29,7 @@ enum Sexp[+A <: Inspect] extends Inspect:
     case Sexp.UnquoteSplicing(s) => ",@" + s.inspect
     case Num(data)               => (if data % 1.0 != 0 then "%s" else "%.0f") format data
     case Sym(data)               => data
-    case Str(data)               => "\"" + Str.escape(Str.decode(data)) + "\""
+    case Str(data)               => "\"" + Str.escape(data) + "\""
     case True                    => "#t"
     case False                   => "#f"
     case Cons(car, cdr)          => "(" + inspectListLikeInner(car, cdr) + ")"
@@ -42,7 +42,7 @@ enum Sexp[+A <: Inspect] extends Inspect:
     case cdr              => car.inspect + " . " + cdr.inspect
 
   override def toString(): String = this match
-    case Str(data) => Str.decode(data)
+    case Str(data) => data
     case _         => super.toString()
 
 object Sexp:
@@ -54,14 +54,6 @@ object Sexp:
       case _     => None
 
   object Str:
-    def fromString(str: String): Str = Str(encode(str))
-
-    def charset: Charset = StandardCharsets.UTF_8
-
-    def encode(str: String): Array[Byte] = str.getBytes(charset)
-
-    def decode(bytes: Array[Byte]): String = charset.decode(ByteBuffer.wrap(bytes)).toString
-
     def escape(data: String): String = data.flatMap {
       case '\\' => "\\\\"
       case '\t' => "\\t"

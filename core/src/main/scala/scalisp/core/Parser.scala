@@ -47,7 +47,7 @@ object Parser:
     val unquote = just(",") *> s map Sexp.Unquote.apply
     val num = just(Token.number) map Sexp.Num.apply
     val sym = just(Token.symbol) map Sexp.Sym.apply
-    val str = just(Token.string) map Sexp.Str.fromString
+    val str = just(Token.string) map Sexp.Str.apply
     val t = just("#t") map (_ => Sexp.True)
     val f = just("#f") map (_ => Sexp.False)
     listLike | quote | quasiquote | unquoteSplicing | unquote | num.backtrack | sym.backtrack | str | t | f

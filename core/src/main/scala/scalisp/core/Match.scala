@@ -18,8 +18,7 @@ given MatchArg[Sexp.Num] = MatchArgByCast("num") { case num @ Sexp.Num(_) => num
 given MatchArg[Double] = MatchArgByCast("num") { case Sexp.Num(num) => num }
 given MatchArg[Int] = MatchArgByCast("num") { case Sexp.Num(num) => num.toInt }
 given MatchArg[Sexp.Sym] = MatchArgByCast("sym") { case sym @ Sexp.Sym(_) => sym }
-given MatchArg[Sexp.Str] = MatchArgByCast("str") { case str @ Sexp.Str(_) => str }
-given MatchArg[String] = MatchArgByCast("str") { case str @ Sexp.Str(_) => str.toString }
+given MatchArg[String] = MatchArgByCast("str") { case Sexp.Str(data) => data }
 given MatchArg[Sexp.Cons[Native]] = MatchArgByCast("cons") { case cons @ Sexp.Cons(_, _) => cons }
 given MatchArg[Native.Vec] = MatchArgByCast("vec") { case Sexp.Pure(vec @ Native.Vec(_)) => vec }
 

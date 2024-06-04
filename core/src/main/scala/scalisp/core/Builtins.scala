@@ -204,9 +204,8 @@ trait BuiltinCompareImpl extends CommonBuiltinImpl:
       val Rest(bs) = take[Rest[Double]](ls)
       vm.push(Sexp.Bool(compareAll(a, bs)))
     case Sexp.Str(a) +: ls =>
-      import math.Ordering.Implicits.seqOrdering
-      val Rest(bs) = take[Rest[Sexp.Str]](ls)
-      vm.push(Sexp.Bool(compareAll(a.toSeq, bs.map(_.data.toSeq))))
+      val Rest(bs) = take[Rest[String]](ls)
+      vm.push(Sexp.Bool(compareAll(a, bs)))
     case _ => throw EvaluationError(s"$name is only defined for strings or numbers")
 
 object BuiltinLt extends BuiltinCompareImpl:
@@ -242,50 +241,49 @@ object BuiltinStr extends CommonBuiltinImpl:
   def name = "str"
   def run(vm: VM, args: Seq[Value]) =
     val Rest(nums) = take[Rest[Double]](args)
-    val bytes = nums map { num =>
-      if num < 0 || 255 < num then throw EvaluationError("Each byte of string must be inside the range 0-255")
-      num.toByte
+    val chars = nums map { num =>
+      if num < Char.MinValue || Char.MaxValue < num then
+        throw EvaluationError("Each byte of string must be inside the range 0-255")
+      num.toChar
     }
-    vm.push(Sexp.Str(bytes.toArray))
+    vm.push(Sexp.Str(chars.mkString))
 
 object BuiltinStrCharAt extends CommonBuiltinImpl:
   def name = "str-char-at"
   def run(vm: VM, args: Seq[Value]) =
-    val (s, index) = take[(Sexp.Str, Int)](args)
-    vm.push(if index < 0 || s.data.length <= index then Sexp.Nil else Sexp.Num(s.data(index).toInt & 0xff))
+    val (s, index) = take[(String, Int)](args)
+    vm.push(if index < 0 || s.length <= index then Sexp.Nil else Sexp.Num(s.charAt(index).toInt))
 
 object BuiltinStrLength extends CommonBuiltinImpl:
   def name = "str-length"
   def run(vm: VM, args: Seq[Value]) =
-    val s = take[Sexp.Str](args)
-    vm.push(Sexp.Num(s.data.length))
+    val s = take[String](args)
+    vm.push(Sexp.Num(s.length))
 
 object BuiltinStrConcat extends CommonBuiltinImpl:
   def name = "str-concat"
   def run(vm: VM, args: Seq[Value]) =
-    val Rest(ss) = take[Rest[Sexp.Str]](args)
-    val buf = ByteBuffer.allocate(ss.map(_.data.length).sum)
-    for s <- ss do buf.put(s.data)
-    vm.push(Sexp.Str(buf.array))
+    val Rest(ss) = take[Rest[String]](args)
+    vm.push(Sexp.Str(ss.mkString))
 
 object BuiltinSubstr extends CommonBuiltinImpl:
   def name = "substr"
   def run(vm: VM, args: Seq[Value]) =
-    val (s, index, size) = take[(Sexp.Str, Int, Int)](args)
-    if index < 0 || s.data.length < index + size then throw EvaluationError("Index out of range")
-    vm.push(Sexp.Str(s.data.slice(index, index + size)))
+    val (s, index, size) = take[(String, Int, Int)](args)
+    if index < 0 || s.length < index + size then throw EvaluationError("Index out of range")
+    vm.push(Sexp.Str(s.slice(index, index + size)))
 
 object BuiltinSymToStr extends CommonBuiltinImpl:
   def name = "sym->str"
   def run(vm: VM, args: Seq[Value]) =
     val arg = take[Sexp.Sym](args)
-    vm.push(Sexp.Str.fromString(arg.data))
+    vm.push(Sexp.Str(arg.data))
 
 object BuiltinNumToStr extends CommonBuiltinImpl:
   def name = "num->str"
   def run(vm: VM, args: Seq[Value]) =
     val n = take[Sexp.Num](args)
-    vm.push(Sexp.Str.fromString(n.inspect))
+    vm.push(Sexp.Str(n.inspect))
 
 object BuiltinStrToNum extends CommonBuiltinImpl:
   def name = "str->num"
@@ -340,8 +338,8 @@ object BuiltinReadFileText extends CommonBuiltinImpl:
   def run(vm: VM, args: Seq[Value]) =
     val filepath = take[String](args)
     TryEval { Source.fromFile(filepath).mkString } match
-      case Right(a) => vm.push(Sexp.Cons(Sexp.True, Sexp.Str.fromString(a)))
-      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
+      case Right(a) => vm.push(Sexp.Cons(Sexp.True, Sexp.Str(a)))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str(e)))
 
 object BuiltinWriteFileText extends CommonBuiltinImpl:
   def name = "write-file-text"
@@ -349,15 +347,15 @@ object BuiltinWriteFileText extends CommonBuiltinImpl:
     val (filepath, contents) = take[(String, String)](args)
     TryEval { Files.writeString(Paths.get(filepath), contents) } match
       case Right(_) => vm.push(Sexp.Cons(Sexp.True, Sexp.Nil))
-      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str(e)))
 
 object BuiltinReadConsoleLine extends CommonBuiltinImpl:
   def name = "read-console-line"
   def run(vm: VM, args: Seq[Value]) =
     take[Unit](args)
     TryEval { StdIn.readLine() } match
-      case Right(a) => vm.push(Sexp.Cons(Sexp.True, Sexp.Str.fromString(a)))
-      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
+      case Right(a) => vm.push(Sexp.Cons(Sexp.True, Sexp.Str(a)))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str(e)))
 
 object BuiltinWriteConsole extends CommonBuiltinImpl:
   def name = "write-console"
@@ -365,13 +363,13 @@ object BuiltinWriteConsole extends CommonBuiltinImpl:
     val text = take[String](args)
     TryEval { print(text) } match
       case Right(_) => vm.push(Sexp.Cons(Sexp.True, Sexp.Nil))
-      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str(e)))
 
 final class BuiltinArgs(val envArgs: Seq[String]) extends CommonBuiltinImpl:
   def name = "args"
   def run(vm: VM, args: Seq[Value]) =
     take[Unit](args)
-    vm.push(Sexp.List(envArgs.map(Sexp.Str.fromString): _*))
+    vm.push(Sexp.List(envArgs.map(Sexp.Str.apply): _*))
 
 object BuiltinEval extends CommonBuiltinImpl:
   def name = "eval"
@@ -379,14 +377,14 @@ object BuiltinEval extends CommonBuiltinImpl:
     val e = take[Value](args)
     vm.context(_.eval(e)) match
       case Right(v) => vm.push(Sexp.Cons(Sexp.True, v))
-      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str(e)))
 
 trait BuiltinMacroExpandImpl(recurse: Boolean) extends CommonBuiltinImpl:
   def run(vm: VM, args: Seq[Value]) =
     val e = take[Value](args)
     vm.context(_.macroExpand(recurse, e)) match
       case Right(v) => vm.push(Sexp.Cons(Sexp.True, v))
-      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str(e)))
 
 object BuiltinMacroExpand extends BuiltinMacroExpandImpl(true):
   def name = "macroexpand"

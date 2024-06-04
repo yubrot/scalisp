@@ -21,7 +21,6 @@ given MatchArg[Sexp.Sym] = MatchArgByCast("sym") { case sym @ Sexp.Sym(_) => sym
 given MatchArg[Sexp.Str] = MatchArgByCast("str") { case str @ Sexp.Str(_) => str }
 given MatchArg[String] = MatchArgByCast("str") { case str @ Sexp.Str(_) => str.toString }
 given MatchArg[Sexp.Cons[Native]] = MatchArgByCast("cons") { case cons @ Sexp.Cons(_, _) => cons }
-given MatchArg[Native.Port] = MatchArgByCast("port") { case Sexp.Pure(port @ Native.Port(_)) => port }
 given MatchArg[Native.Vec] = MatchArgByCast("vec") { case Sexp.Pure(vec @ Native.Vec(_)) => vec }
 
 given [T: MatchArg]: MatchArg[Seq[T]] with

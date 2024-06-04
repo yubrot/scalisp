@@ -8,7 +8,6 @@ enum Native extends Inspect:
   case Macro(env: Env[Value], pattern: Pattern, code: Code)
   case Syntax(impl: SyntaxImpl)
   case Vec(payload: Array[Value])
-  case Port(impl: PortImpl)
 
   def isProc: Boolean = this match
     case Fun(_, _, _) | Builtin(_) => true
@@ -22,14 +21,9 @@ enum Native extends Inspect:
     case Vec(_) => true
     case _      => false
 
-  def isPort: Boolean = this match
-    case Port(_) => true
-    case _       => false
-
   def inspect: String = this match
     case Fun(_, _, _)   => "<fun>"
     case Builtin(_)     => "<builtin>"
     case Macro(_, _, _) => "<macro>"
     case Syntax(_)      => "<syntax>"
     case Vec(payload)   => Sexp.Cons(Sexp.Sym("vec"), Sexp.List(payload: _*)).inspect
-    case Port(_)        => "<port>"

@@ -2,8 +2,10 @@ package scalisp.core
 
 import java.io.{InputStream, BufferedInputStream, OutputStream, BufferedOutputStream}
 import java.nio.ByteBuffer
-import java.nio.file.{FileSystems, Files}
+import java.nio.file.{FileSystems, Files, Paths}
 import scala.util.control.NonFatal
+import scala.io.Source
+import scala.io.StdIn
 
 object Builtins:
   def register(context: Context, args: Seq[String]): Unit =
@@ -29,7 +31,6 @@ object Builtins:
     put(context, builtinTestBool)
     put(context, builtinTestProc)
     put(context, builtinTestMeta)
-    put(context, builtinTestPort)
     put(context, builtinTestVec)
 
     put(context, builtinAdd)
@@ -48,8 +49,8 @@ object Builtins:
     put(context, BuiltinNever)
 
     put(context, BuiltinStr)
-    put(context, BuiltinStrRef)
-    put(context, BuiltinStrBytesize)
+    put(context, BuiltinStrCharAt)
+    put(context, BuiltinStrLength)
     put(context, BuiltinStrConcat)
     put(context, BuiltinSubstr)
     put(context, BuiltinSymToStr)
@@ -58,24 +59,15 @@ object Builtins:
 
     put(context, BuiltinVec)
     put(context, BuiltinVecMake)
-    put(context, BuiltinVecRef)
     put(context, BuiltinVecLength)
+    put(context, BuiltinVecGet)
     put(context, BuiltinVecSet)
     put(context, BuiltinVecCopy)
 
-    put(context, BuiltinOpen)
-    put(context, BuiltinClose)
-    put(context, BuiltinStdin)
-    put(context, BuiltinStdout)
-    put(context, BuiltinStderr)
-
-    put(context, BuiltinReadByte)
-    put(context, BuiltinReadStr)
-    put(context, BuiltinReadLine)
-    put(context, BuiltinWriteByte)
-    put(context, BuiltinWriteStr)
-    put(context, BuiltinWriteLine)
-    put(context, BuiltinFlush)
+    put(context, BuiltinReadFileText)
+    put(context, BuiltinWriteFileText)
+    put(context, BuiltinReadConsoleLine)
+    put(context, BuiltinWriteConsole)
 
     put(context, BuiltinArgs(args))
 
@@ -158,7 +150,6 @@ lazy val builtinTestNil = BuiltinTestImpl("nil?") { case Sexp.Nil => true }
 lazy val builtinTestBool = BuiltinTestImpl("bool?") { case Sexp.Bool(_) => true }
 lazy val builtinTestProc = BuiltinTestImpl("proc?") { case Sexp.Pure(p) => p.isProc }
 lazy val builtinTestMeta = BuiltinTestImpl("meta?") { case Sexp.Pure(p) => p.isMeta }
-lazy val builtinTestPort = BuiltinTestImpl("port?") { case Sexp.Pure(p) => p.isPort }
 lazy val builtinTestVec = BuiltinTestImpl("vec?") { case Sexp.Pure(p) => p.isVec }
 
 class BuiltinArithmeticImpl(
@@ -257,14 +248,14 @@ object BuiltinStr extends CommonBuiltinImpl:
     }
     vm.push(Sexp.Str(bytes.toArray))
 
-object BuiltinStrRef extends CommonBuiltinImpl:
-  def name = "str-ref"
+object BuiltinStrCharAt extends CommonBuiltinImpl:
+  def name = "str-char-at"
   def run(vm: VM, args: Seq[Value]) =
     val (s, index) = take[(Sexp.Str, Int)](args)
     vm.push(if index < 0 || s.data.length <= index then Sexp.Nil else Sexp.Num(s.data(index).toInt & 0xff))
 
-object BuiltinStrBytesize extends CommonBuiltinImpl:
-  def name = "str-bytesize"
+object BuiltinStrLength extends CommonBuiltinImpl:
+  def name = "str-length"
   def run(vm: VM, args: Seq[Value]) =
     val s = take[Sexp.Str](args)
     vm.push(Sexp.Num(s.data.length))
@@ -315,17 +306,17 @@ object BuiltinVecMake extends CommonBuiltinImpl:
     for i <- array.indices do array(i) = init
     vm.push(Sexp.Pure(Native.Vec(array)))
 
-object BuiltinVecRef extends CommonBuiltinImpl:
-  def name = "vec-ref"
-  def run(vm: VM, args: Seq[Value]) =
-    val (vec, index) = take[(Native.Vec, Int)](args)
-    vm.push(if index < 0 || vec.payload.size <= index then Sexp.Nil else vec.payload(index))
-
 object BuiltinVecLength extends CommonBuiltinImpl:
   def name = "vec-length"
   def run(vm: VM, args: Seq[Value]) =
     val vec = take[Native.Vec](args)
     vm.push(Sexp.Num(vec.payload.length))
+
+object BuiltinVecGet extends CommonBuiltinImpl:
+  def name = "vec-get"
+  def run(vm: VM, args: Seq[Value]) =
+    val (vec, index) = take[(Native.Vec, Int)](args)
+    vm.push(if index < 0 || vec.payload.size <= index then Sexp.Nil else vec.payload(index))
 
 object BuiltinVecSet extends CommonBuiltinImpl:
   def name = "vec-set!"
@@ -344,105 +335,37 @@ object BuiltinVecCopy extends CommonBuiltinImpl:
       vm.push(Sexp.Nil)
     else throw EvaluationError("Index out of range")
 
-object BuiltinOpen extends CommonBuiltinImpl:
-  def name = "open"
+object BuiltinReadFileText extends CommonBuiltinImpl:
+  def name = "read-file-text"
   def run(vm: VM, args: Seq[Value]) =
-    val (filepath, mode) = take[(String, String)](args)
-    TryEval {
-      mode match
-        case "r" =>
-          val path = FileSystems.getDefault().getPath(filepath)
-          val stream = Files.newInputStream(path)
-          Sexp.Pure(Native.Port(InputStreamPortImpl(stream)))
-        case "w" =>
-          val path = FileSystems.getDefault().getPath(filepath)
-          val stream = Files.newOutputStream(path)
-          Sexp.Pure(Native.Port(OutputStreamPortImpl(stream)))
-        case _ =>
-          throw EvaluationError("Unsupported mode for open: " + mode)
-    } match
-      case Right(a) => vm.push(Sexp.Cons(Sexp.True, a))
+    val filepath = take[String](args)
+    TryEval { Source.fromFile(filepath).mkString } match
+      case Right(a) => vm.push(Sexp.Cons(Sexp.True, Sexp.Str.fromString(a)))
       case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
 
-object BuiltinClose extends CommonBuiltinImpl:
-  def name = "close"
+object BuiltinWriteFileText extends CommonBuiltinImpl:
+  def name = "write-file-text"
   def run(vm: VM, args: Seq[Value]) =
-    val port = take[Native.Port](args)
-    port.impl.close() match
+    val (filepath, contents) = take[(String, String)](args)
+    TryEval { Files.writeString(Paths.get(filepath), contents) } match
       case Right(_) => vm.push(Sexp.Cons(Sexp.True, Sexp.Nil))
       case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
 
-class BuiltinPortImpl(val name: String, val portImpl: PortImpl) extends CommonBuiltinImpl:
+object BuiltinReadConsoleLine extends CommonBuiltinImpl:
+  def name = "read-console-line"
   def run(vm: VM, args: Seq[Value]) =
     take[Unit](args)
-    vm.push(Sexp.Pure(Native.Port(portImpl)))
+    TryEval { StdIn.readLine() } match
+      case Right(a) => vm.push(Sexp.Cons(Sexp.True, Sexp.Str.fromString(a)))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
 
-object BuiltinStdin extends BuiltinPortImpl("stdin", InputStreamPortImpl(System.in))
-object BuiltinStdout extends BuiltinPortImpl("stdout", OutputStreamPortImpl(System.out))
-object BuiltinStderr extends BuiltinPortImpl("stderr", OutputStreamPortImpl(System.err))
-
-private transparent trait ReadBuiltinOps:
-  def enforceIn(p: Native.Port): PortIn = p.impl.in match
-    case Some(p) => p
-    case None    => throw EvaluationError("port is not available for reading")
-
-  def readResult[A](r: Either[String, Option[A]])(convert: A => Value): Value =
-    r match
-      case Right(Some(v)) => Sexp.Cons(Sexp.True, convert(v))
-      case Right(None)    => Sexp.Cons(Sexp.True, Sexp.Sym("eof"))
-      case Left(e)        => Sexp.Cons(Sexp.False, Sexp.Str.fromString(e))
-
-object BuiltinReadByte extends CommonBuiltinImpl, ReadBuiltinOps:
-  def name = "read-byte"
+object BuiltinWriteConsole extends CommonBuiltinImpl:
+  def name = "write-console"
   def run(vm: VM, args: Seq[Value]) =
-    val port = take[Native.Port](args)
-    vm.push(readResult(enforceIn(port).readByte()) { v => Sexp.Num(v.toInt & 0xff) })
-
-object BuiltinReadStr extends CommonBuiltinImpl, ReadBuiltinOps:
-  def name = "read-str"
-  def run(vm: VM, args: Seq[Value]) =
-    val (size, port) = take[(Int, Native.Port)](args)
-    vm.push(readResult(enforceIn(port).readBytes(size))(Sexp.Str.apply))
-
-object BuiltinReadLine extends CommonBuiltinImpl, ReadBuiltinOps:
-  def name = "read-line"
-  def run(vm: VM, args: Seq[Value]) =
-    val port = take[Native.Port](args)
-    vm.push(readResult(enforceIn(port).readLine())(Sexp.Str.apply))
-
-private transparent trait WriteBuiltinOps:
-  def enforceOut(p: Native.Port): PortOut = p.impl.out match
-    case Some(p) => p
-    case None    => throw EvaluationError("port is not available for writing")
-
-  def writeResult(r: Either[String, Int]): Value =
-    r match
-      case Right(i) => Sexp.Cons(Sexp.True, if i == 0 then Sexp.Nil else Sexp.Num(i))
-      case Left(e)  => Sexp.Cons(Sexp.False, Sexp.Str.fromString(e))
-
-object BuiltinWriteByte extends CommonBuiltinImpl, WriteBuiltinOps:
-  def name = "write-byte"
-  def run(vm: VM, args: Seq[Value]) =
-    val (b, port) = take[(Int, Native.Port)](args)
-    vm.push(writeResult(enforceOut(port).writeByte(b.toByte)))
-
-object BuiltinWriteStr extends CommonBuiltinImpl, WriteBuiltinOps:
-  def name = "write-str"
-  def run(vm: VM, args: Seq[Value]) =
-    val (s, port) = take[(Sexp.Str, Native.Port)](args)
-    vm.push(writeResult(enforceOut(port).writeBytes(s.data)))
-
-object BuiltinWriteLine extends CommonBuiltinImpl, WriteBuiltinOps:
-  def name = "write-line"
-  def run(vm: VM, args: Seq[Value]) =
-    val (s, port) = take[(Sexp.Str, Native.Port)](args)
-    vm.push(writeResult(enforceOut(port).writeLine(s.data)))
-
-object BuiltinFlush extends CommonBuiltinImpl, WriteBuiltinOps:
-  def name = "flush"
-  def run(vm: VM, args: Seq[Value]) =
-    val port = take[Native.Port](args)
-    vm.push(writeResult(enforceOut(port).flush()))
+    val text = take[String](args)
+    TryEval { print(text) } match
+      case Right(_) => vm.push(Sexp.Cons(Sexp.True, Sexp.Nil))
+      case Left(e)  => vm.push(Sexp.Cons(Sexp.False, Sexp.Str.fromString(e)))
 
 final class BuiltinArgs(val envArgs: Seq[String]) extends CommonBuiltinImpl:
   def name = "args"
@@ -470,81 +393,3 @@ object BuiltinMacroExpand extends BuiltinMacroExpandImpl(true):
 
 object BuiltinMacroExpandOnce extends BuiltinMacroExpandImpl(false):
   def name = "macroexpand-1"
-
-class InputStreamPortImpl(s: InputStream) extends PortImpl:
-  val stream = BufferedInputStream(s)
-
-  def in = Some(portIn)
-  def out = None
-  def close() = TryEval(stream.close())
-
-  def portIn = new PortIn:
-    def readByte() = TryEval {
-      val ch = stream.read()
-      if ch != -1 then Some(ch.toByte) else None
-    }
-
-    def readBytes(size: Int) = TryEval {
-      val bytes = new Array[Byte](size)
-      val numRead = stream.read(bytes)
-      if numRead != -1 then Some(bytes.slice(0, numRead)) else None
-    }
-
-    def readLine() = TryEval {
-      val line = scala.collection.mutable.ListBuffer.empty[Array[Byte]]
-      var terminate = false
-      while !terminate do
-        val bytes = new Array[Byte](256)
-        stream.mark(256)
-        val numRead = stream.read(bytes)
-        val newline = (0 until numRead).find { i => bytes(i) == 0x0a }
-        if numRead == -1 then terminate = true // terminated by EOF
-        else
-          newline match
-            case Some(index) =>
-              line += bytes.slice(0, index) // excluding newline
-              stream.reset()
-              stream.skip(index + 1)
-              terminate = true // terminated by newline
-            case None =>
-              line += bytes.slice(0, numRead)
-
-      if line.isEmpty then None
-      else
-        val buf = ByteBuffer.allocate(line.map(_.length).sum)
-        for chunk <- line do buf.put(chunk)
-        Some(buf.array)
-    }
-
-class OutputStreamPortImpl(s: OutputStream) extends PortImpl:
-  val stream = BufferedOutputStream(s)
-
-  def in = None
-  def out = Some(portOut)
-  def close() = TryEval {
-    stream.flush()
-    stream.close()
-  }
-
-  def portOut = new PortOut:
-    def writeByte(byte: Byte) = TryEval {
-      stream.write(byte.toInt)
-      1
-    }
-
-    def writeBytes(bytes: Array[Byte]) = TryEval {
-      stream.write(bytes)
-      bytes.length
-    }
-
-    def writeLine(line: Array[Byte]) = TryEval {
-      stream.write(line)
-      stream.write(0x0a)
-      stream.flush()
-      line.length + 1
-    }
-
-    def flush() = TryEval {
-      stream.flush()
-      0
-    }
